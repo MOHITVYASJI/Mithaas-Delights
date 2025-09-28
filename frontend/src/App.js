@@ -9,6 +9,7 @@ import { Input } from "./components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "./components/ui/dialog";
 import { AdminPanel } from "./components/AdminPanel";
 import { CartDialog } from "./components/CartCheckout";
+import { ChatBot } from "./components/ChatBot";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import "./App.css";
@@ -794,6 +795,7 @@ function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
+        <ChatBot />
         <Toaster />
       </div>
     </CartProvider>

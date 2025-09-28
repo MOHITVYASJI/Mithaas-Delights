@@ -11,6 +11,7 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
+import google.generativeai as genai
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -128,6 +129,18 @@ class ReviewCreate(BaseModel):
     user_name: str
     rating: int = Field(ge=1, le=5)
     comment: str
+
+# Chatbot Models
+class ChatMessage(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    session_id: str
+    message: str
+    response: str
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ChatRequest(BaseModel):
+    session_id: str
+    message: str
 
 # Helper functions
 def prepare_for_mongo(data):
@@ -267,6 +280,104 @@ async def create_review(review: ReviewCreate):
 async def get_product_reviews(product_id: str):
     reviews = await db.reviews.find({"product_id": product_id}).to_list(length=None)
     return [Review(**parse_from_mongo(review)) for review in reviews]
+
+# Chatbot Routes
+@api_router.post("/chat")
+async def chat_with_bot(chat_request: ChatRequest):
+    try:
+        # Get Gemini API key from environment
+        gemini_api_key = os.environ.get('GEMINI_API_KEY')
+        if not gemini_api_key:
+            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+        
+        # Configure Gemini
+        genai.configure(api_key=gemini_api_key)
+        model = genai.GenerativeModel("gemini-1.5-flash")
+       
+        # Create system message for Mithaas Delights context
+        system_message = """You are a helpful customer support assistant for Mithaas Delights, a premium Indian sweets and snacks online store. 
+
+About Mithaas Delights:
+- We sell authentic Indian sweets (mithai), savory snacks (namkeen), laddus, Bengali sweets, dry fruit sweets, and festival specials
+- We offer premium quality products made with traditional recipes and finest ingredients
+- We provide free delivery and accept both Cash on Delivery and online payments and advance
+- Our Contact hours: Monday-Sunday 9:00 AM - 9:00 PM, Sunday 10:00 AM - 8:00 PM
+- Contact: +91 8989549544, mithaasdelightsofficial@gmail.com
+- Location: 64, Kaveri Nagar, Indore, Madhya Pradesh 452006, India
+
+You should help customers with:
+- Product information and recommendations
+- Order placement guidance
+- Delivery and payment information
+- General FAQs about our products and services
+- Order tracking assistance
+
+Always be friendly, helpful, and promote our premium quality products. If you don't know specific product details, suggest the customer browse our catalog or contact our support team."""
+        
+        # # Initialize LLM chat with Gemini
+        # chat = LlmChat(
+        #     api_key=gemini_api_key,
+        #     session_id=chat_request.session_id,
+        #     system_message=system_message
+        # ).with_model("gemini", "gemini-2.0-flash")
+        
+        # # Create user message
+        # user_message = UserMessage(text=chat_request.message)
+        
+        # # Get response from Gemini
+        # response = await chat.send_message(user_message)
+                # Get response
+        response = model.generate_content([system_message, chat_request.message])
+        answer = response.text if response else "Sorry, I couldn't generate a response."
+
+        # Store chat in database
+        chat_record = ChatMessage(
+            session_id=chat_request.session_id,
+            message=chat_request.message,
+            response=answer
+        )
+        await db.chat_messages.insert_one(prepare_for_mongo(chat_record.dict()))
+        
+        return {
+            "response": answer,
+            "session_id": chat_request.session_id,
+            "timestamp": chat_record.created_at.isoformat()
+        }
+        
+    except Exception as e:
+        logger.error(f"Chat error: {str(e)}")
+        # Fallback response for errors
+        fallback_responses = [
+            "I'm sorry, I'm having trouble connecting right now. Please try again in a moment or contact our support team at +91 98765 43210.",
+            "Thank you for your interest in Mithaas Delights! I'm temporarily unavailable, but you can browse our products or call us at +91 98765 43210 for immediate assistance.",
+            "I apologize for the inconvenience. Please feel free to explore our premium collection of sweets and snacks, or reach out to our team directly."
+        ]
+        import random
+        return {
+            "response": random.choice(fallback_responses),
+            "session_id": chat_request.session_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "error": "ai_service_unavailable"
+        }
+
+@api_router.get("/chat/history/{session_id}")
+async def get_chat_history(session_id: str):
+    try:
+        chat_history = await db.chat_messages.find(
+            {"session_id": session_id}
+        ).sort("created_at", 1).to_list(length=50)  # Last 50 messages
+        
+        return [
+            {
+                "message": chat["message"],
+                "response": chat["response"],
+                "timestamp": chat["created_at"]
+            }
+            for chat in chat_history
+        ]
+    except Exception as e:
+        logger.error(f"Error fetching chat history: {str(e)}")
+        return []
 
 # Initialize sample data
 @api_router.post("/init-sample-data")
