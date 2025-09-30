@@ -292,7 +292,7 @@ async def chat_with_bot(chat_request: ChatRequest):
         
         # Configure Gemini
         genai.configure(api_key=gemini_api_key)
-        model = genai.GenerativeModel("gemini-1.5-flash")
+        model = genai.GenerativeModel("gemini-2.5-flash")
        
         # Create system message for Mithaas Delights context
         system_message = """You are a helpful customer support assistant for Mithaas Delights, a premium Indian sweets and snacks online store. 
@@ -390,7 +390,7 @@ async def init_sample_data():
             "price": 599,
             "original_price": 699,
             "category": "mithai",
-            "image_url": "https://images.unsplash.com/photo-1606471191009-63b7dcf9e22f?w=400&h=400&fit=crop",
+            "image_url": "https://recipes.net/wp-content/uploads/2022/07/kaju-katli.jpg",
             "weight": "250g",
             "ingredients": ["Cashews", "Sugar", "Ghee", "Silver Leaf"],
             "is_featured": True,
@@ -401,7 +401,7 @@ async def init_sample_data():
             "description": "Soft, spongy milk-solid balls soaked in rose-flavored sugar syrup",
             "price": 299,
             "category": "mithai",
-            "image_url": "https://images.unsplash.com/photo-1571119743851-7c6eb63b5da6?w=400&h=400&fit=crop",
+            "image_url": "https://tse3.mm.bing.net/th/id/OIP.B32bansRI7RS3yfbUSEBNwHaHa?rs=1&pid=ImgDetMain&o=7&rm=3",
             "weight": "500g",
             "ingredients": ["Milk Powder", "Sugar", "Ghee", "Rose Water"],
             "is_featured": True
@@ -411,7 +411,7 @@ async def init_sample_data():
             "description": "Traditional gram flour balls sweetened with jaggery and enriched with ghee",
             "price": 399,
             "category": "laddu",
-            "image_url": "https://images.unsplash.com/photo-1599599810094-c06e16c3315f?w=400&h=400&fit=crop",
+            "image_url": "https://th.bing.com/th/id/OIP.0ZB3XubESFclOtXe3qJYxwHaHa?w=179&h=180&c=7&r=0&o=7&pid=1.7&rm=3",
             "weight": "400g",
             "ingredients": ["Gram Flour", "Jaggery", "Ghee", "Cashews", "Raisins"],
             "is_featured": True
@@ -421,7 +421,7 @@ async def init_sample_data():
             "description": "Crispy blend of lentils, nuts, and spices - perfect tea-time snack",
             "price": 199,
             "category": "namkeen",
-            "image_url": "https://images.unsplash.com/photo-1599599795865-8aa1e33fa8a7?w=400&h=400&fit=crop",
+            "image_url": "https://th.bing.com/th/id/OIP.yPwaOp3hag9pVNe6rTkgfQHaHa?w=166&h=180&c=7&r=0&o=7&pid=1.7&rm=3",
             "weight": "300g",
             "ingredients": ["Lentils", "Peanuts", "Spices", "Vegetable Oil"]
         },
@@ -430,7 +430,7 @@ async def init_sample_data():
             "description": "Soft, spongy cottage cheese balls in light sugar syrup",
             "price": 249,
             "category": "bengali_sweets",
-            "image_url": "https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=400&h=400&fit=crop",
+            "image_url": "https://th.bing.com/th/id/OIP.ibmTOU1t-Zl1LKlZUOAewgHaHa?w=225&h=180&c=7&r=0&o=7&pid=1.7&rm=3",
             "weight": "400g",
             "ingredients": ["Cottage Cheese", "Sugar", "Cardamom"],
             "is_featured": True
@@ -441,7 +441,7 @@ async def init_sample_data():
             "price": 799,
             "original_price": 899,
             "category": "dry_fruit_sweets",
-            "image_url": "https://images.unsplash.com/photo-1571119743851-7c6eb63b5da6?w=400&h=400&fit=crop",
+            "image_url": "https://th.bing.com/th/id/OIP.gMb3Wu-UzCV_yv4u-yNenwAAAA?w=285&h=190&c=7&r=0&o=7&pid=1.7&rm=3",
             "weight": "300g",
             "ingredients": ["Almonds", "Cashews", "Pistachios", "Khoya", "Sugar"],
             "discount_percentage": 11
@@ -471,7 +471,7 @@ app.add_middleware(
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+   format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
 

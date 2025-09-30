@@ -13,7 +13,7 @@ import { ChatBot } from "./components/ChatBot";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import "./App.css";
-
+import "./components/images/Premium_mithai.png";
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
@@ -275,15 +275,15 @@ const HeroSection = () => {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-6 pt-8 border-t border-orange-200">
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600" data-testid="happy-customers-count">10K+</div>
+                <div className="text-2xl font-bold text-orange-600" data-testid="happy-customers-count">5K+</div>
                 <div className="text-sm text-gray-600">Happy Customers</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600" data-testid="products-count">50+</div>
+                <div className="text-2xl font-bold text-orange-600" data-testid="products-count">10+</div>
                 <div className="text-sm text-gray-600">Premium Products</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600" data-testid="cities-count">25+</div>
+                <div className="text-2xl font-bold text-orange-600" data-testid="cities-count">3+</div>
                 <div className="text-sm text-gray-600">Cities Served</div>
               </div>
             </div>
@@ -293,7 +293,7 @@ const HeroSection = () => {
           <div className="relative">
             <div className="relative rounded-2xl overflow-hidden shadow-2xl">
               <img 
-                src="https://images.unsplash.com/photo-1606471191009-63b7dcf9e22f?w=600&h=600&fit=crop"
+                src="\Premium_mithai.png"
                 alt="Premium Indian Sweets"
                 className="w-full h-96 lg:h-[500px] object-cover"
               />
@@ -451,24 +451,24 @@ const AboutSection = () => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-4">
               <img 
-                src="https://images.unsplash.com/photo-1578662996442-48f60103fc96?w=300&h=200&fit=crop"
+                src="https://lh3.googleusercontent.com/gg/AAHar4cFdaQc-K1pKHWOLD44h9jHoYa7m5N_R6oDbsPIFn4WSEOSqvcTkt61AYNQUW5bnUUbvJVaWLCvkRqh2UBrcP0cFsqAeJHyl9FUFK7DWd3jM86hCMn1Y6-ofPRLIMW5JwKTGGg2sG0c369sOvWCtjP0RmbflspHLapvEf5UvxjZpLeANvHaT-ggF_uNomK1IHTDjaNYB6-eM-uXtq6A0SidHAyVZdG8JUXrwpn5VqnYyKVN6H5JSEhL6rZbWM-JILbctYCT0qCfCxb579B4mkVNhj3LBCFoLRsnrj5RA5E0SMLp_ouLmFTe65AmdNOdK1CkGKqSh6wTHoclYlvFnLtq=s1024"
                 alt="Traditional sweet making"
                 className="rounded-lg shadow-md"
               />
               <img 
-                src="https://images.unsplash.com/photo-1599599810094-c06e16c3315f?w=300&h=200&fit=crop"
+                src="https://lh3.googleusercontent.com/gg-dl/AJfQ9KTh9gCdVMwkvObt7am5S_JwcYSqOHIqxhv0PINvV1fVYmm9lp3xd5kzXfwoeHHQo40XAA0xeoWCfpS6azXz6LrFhk3WYhw17nzC_uw6S7Y8dbLOl4-0PkF4SL5eZ-8e7zwACJaZedBD0stqObrpCRSjViMontbAsN-XBUrimD0Zuw0CZw=s1024"
                 alt="Premium ingredients"
                 className="rounded-lg shadow-md"
               />
             </div>
             <div className="space-y-4 mt-8">
               <img 
-                src="https://images.unsplash.com/photo-1571119743851-7c6eb63b5da6?w=300&h=200&fit=crop"
+                src="https://lh3.googleusercontent.com/gg/AAHar4e6yrcbXa60SQNMLkX1cHkFbu7iUSFpHWKgS6zW6UCv3c_v5DvxaP3cHqbKpj7fIbw_D_JW4wb-2vke8ZWUEkKxhuPsDlqo1V3buyFSWCWMrUoOrLtTEnuSObiWoB41llrFW4lSeufINs-CjztOPbrRHHWwgB-Rz0bqvkugYn58-2B69LRgaKBkkyTKv4Nr9f-EklU96i4KvKDms46tvcBiiYVCfT9w0eJSlmLfXnV-j5oCROe7qwDBnQtv0HJT8newVslw6T3mDOwXf_tLVYYcBVR5uco91HLh9hMFqq08TVyXMaQcL03r1GMmfdFiLOQneetFKUkdWY14z0-q7602=s1024"
                 alt="Handcrafted sweets"
                 className="rounded-lg shadow-md"
               />
               <img 
-                src="https://images.unsplash.com/photo-1606471191009-63b7dcf9e22f?w=300&h=200&fit=crop"
+                src="https://lh3.googleusercontent.com/gg/AAHar4eafvtf5YSBhFxQEokS0adf8l2czmhsCLz8GHdaeoqRaEd4G2rTBmS6qE2NzAB50OTmf1QK74zgAKQQhhRO6Bu3EG97_gJVUHBrGZI3546SoGDxw0uLpCj4bf81vJh24vWKOg17kd8Vq5Y0rS91lXJo22ifdoMVfF8qQlMc3H1aig-gBRDPhKXP15TFCJDTT0mX0yur1X1xnapF2tw_8B_pfZXtbR3tZwxlzG9o3Si6N2yfXxsPwINk1kVAY9FyKZKmdEgPu8v5Hag4e119XDTV21BSY_h3uHhZpP1naB3WhHUlaGip8_NyXPZu5tTE0LSPKaEmgICNGjD5gL_KZzp8=s1024"
                 alt="Quality testing"
                 className="rounded-lg shadow-md"
               />
@@ -506,7 +506,7 @@ const ContactSection = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-800 mb-1">Visit Our Store</h3>
-                <p className="text-gray-600">123 Sweet Street, Mumbai, Maharashtra 400001, India</p>
+                <p className="text-gray-600">Kaveri Nagar, Inodre, Madhya Pradesh 452006, India</p>
               </div>
             </div>
 
@@ -516,8 +516,8 @@ const ContactSection = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-800 mb-1">Call Us</h3>
-                <p className="text-gray-600">+91 98765 43210</p>
-                <p className="text-gray-600">+91 98765 43211</p>
+                <p className="text-gray-600">+91 8989549544</p>
+                <p className="text-gray-600">+91 9754681201</p>
               </div>
             </div>
 
@@ -527,7 +527,7 @@ const ContactSection = () => {
               </div>
               <div>
                 <h3 className="font-semibold text-gray-800 mb-1">Email Us</h3>
-                <p className="text-gray-600">orders@mithaasdelights.com</p>
+                <p className="text-gray-600">mithaasdelightsofficial@gmail.com</p>
                 <p className="text-gray-600">support@mithaasdelights.com</p>
               </div>
             </div>
@@ -616,7 +616,7 @@ const Footer = () => {
           <div>
             <h4 className="font-semibold mb-4">Connect</h4>
             <ul className="space-y-2 text-gray-400">
-              <li><a href="#" className="hover:text-orange-400 transition-colors">Instagram</a></li>
+              <li><a href="https://www.instagram.com/mithaasdelightsofficial?igsh=aW85Z2h6bTEwazJv" className="hover:text-orange-400 transition-colors">Instagram</a></li>
               <li><a href="#" className="hover:text-orange-400 transition-colors">WhatsApp</a></li>
               <li><a href="#" className="hover:text-orange-400 transition-colors">Facebook</a></li>
               <li><a href="#" className="hover:text-orange-400 transition-colors">Twitter</a></li>
