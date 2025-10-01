@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Security
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -6,12 +6,19 @@ from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
 from pathlib import Path
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, EmailStr
 from typing import List, Optional
 import uuid
 from datetime import datetime, timezone
 from enum import Enum
 import google.generativeai as genai
+from auth_utils import (
+    get_password_hash,
+    verify_password,
+    create_access_token,
+    get_current_user,
+    get_current_admin_user
+)
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -103,18 +110,49 @@ class OrderCreate(BaseModel):
     phone_number: str
     email: str
 
+class UserRole(str, Enum):
+    USER = "user"
+    ADMIN = "admin"
+
 class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
-    email: str
+    email: EmailStr
     phone: Optional[str] = None
+    role: UserRole = UserRole.USER
     addresses: List[str] = []
+    wishlist: List[str] = []  # Product IDs
+    is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class UserInDB(User):
+    hashed_password: str
 
 class UserCreate(BaseModel):
     name: str
+    email: EmailStr
+    password: str
+    phone: Optional[str] = None
+
+class UserLogin(BaseModel):
+    email: EmailStr
+    password: str
+
+class UserResponse(BaseModel):
+    id: str
+    name: str
     email: str
     phone: Optional[str] = None
+    role: UserRole
+    addresses: List[str] = []
+    wishlist: List[str] = []
+    created_at: datetime
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str
+    user: UserResponse
 
 class Review(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -191,14 +229,27 @@ async def get_product(product_id: str):
     return Product(**parse_from_mongo(product))
 
 @api_router.post("/products", response_model=Product)
-async def create_product(product: ProductCreate):
+async def create_product(
+    product: ProductCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create a new product (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
     product_dict = product.dict()
     product_obj = Product(**product_dict)
     await db.products.insert_one(prepare_for_mongo(product_obj.dict()))
     return product_obj
 
 @api_router.put("/products/{product_id}", response_model=Product)
-async def update_product(product_id: str, product_update: ProductCreate):
+async def update_product(
+    product_id: str,
+    product_update: ProductCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update a product (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
     product_dict = product_update.dict()
     product_dict["id"] = product_id
     product_dict["updated_at"] = datetime.now(timezone.utc)
@@ -215,7 +266,13 @@ async def update_product(product_id: str, product_update: ProductCreate):
     return Product(**parse_from_mongo(updated_product))
 
 @api_router.delete("/products/{product_id}")
-async def delete_product(product_id: str):
+async def delete_product(
+    product_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete a product (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
@@ -237,12 +294,30 @@ async def get_order(order_id: str):
     return Order(**parse_from_mongo(order))
 
 @api_router.get("/orders", response_model=List[Order])
-async def get_orders():
+async def get_orders(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get all orders (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
     orders = await db.orders.find().to_list(length=None)
     return [Order(**parse_from_mongo(order)) for order in orders]
 
+@api_router.get("/orders/user/my-orders", response_model=List[Order])
+async def get_my_orders(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get current user's orders"""
+    current_user = await get_current_user(credentials, db)
+    
+    orders = await db.orders.find({"user_id": current_user["id"]}).to_list(length=None)
+    return [Order(**parse_from_mongo(order)) for order in orders]
+
 @api_router.put("/orders/{order_id}/status")
-async def update_order_status(order_id: str, status: OrderStatus):
+async def update_order_status(
+    order_id: str,
+    status: OrderStatus,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update order status (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
     result = await db.orders.update_one(
         {"id": order_id},
         {"$set": {"status": status, "updated_at": datetime.now(timezone.utc).isoformat()}}
@@ -253,20 +328,186 @@ async def update_order_status(order_id: str, status: OrderStatus):
     
     return {"message": "Order status updated successfully"}
 
-# User Routes
-@api_router.post("/users", response_model=User)
-async def create_user(user: UserCreate):
-    user_dict = user.dict()
-    user_obj = User(**user_dict)
-    await db.users.insert_one(prepare_for_mongo(user_obj.dict()))
-    return user_obj
+# Authentication Routes
+@api_router.post("/auth/register", response_model=TokenResponse)
+async def register(user_data: UserCreate):
+    """Register a new user"""
+    # Check if user already exists
+    existing_user = await db.users.find_one({"email": user_data.email})
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered"
+        )
+    
+    # Create new user with hashed password
+    hashed_password = get_password_hash(user_data.password)
+    user_dict = {
+        "id": str(uuid.uuid4()),
+        "name": user_data.name,
+        "email": user_data.email,
+        "phone": user_data.phone,
+        "hashed_password": hashed_password,
+        "role": UserRole.USER.value,
+        "addresses": [],
+        "wishlist": [],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.insert_one(user_dict)
+    
+    # Create access token
+    access_token = create_access_token(data={"sub": user_dict["id"], "email": user_dict["email"], "role": user_dict["role"]})
+    
+    # Return token and user info
+    user_response = UserResponse(
+        id=user_dict["id"],
+        name=user_dict["name"],
+        email=user_dict["email"],
+        phone=user_dict["phone"],
+        role=UserRole(user_dict["role"]),
+        addresses=user_dict["addresses"],
+        wishlist=user_dict["wishlist"],
+        created_at=datetime.fromisoformat(user_dict["created_at"])
+    )
+    
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
 
-@api_router.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: str):
+@api_router.post("/auth/login", response_model=TokenResponse)
+async def login(credentials: UserLogin):
+    """Login user and return JWT token"""
+    # Find user by email
+    user = await db.users.find_one({"email": credentials.email})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Verify password
+    if not verify_password(credentials.password, user["hashed_password"]):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    
+    # Check if user is active
+    if not user.get("is_active", True):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is inactive"
+        )
+    
+    # Create access token
+    access_token = create_access_token(
+        data={"sub": user["id"], "email": user["email"], "role": user["role"]}
+    )
+    
+    # Return token and user info
+    user_response = UserResponse(
+        id=user["id"],
+        name=user["name"],
+        email=user["email"],
+        phone=user.get("phone"),
+        role=UserRole(user["role"]),
+        addresses=user.get("addresses", []),
+        wishlist=user.get("wishlist", []),
+        created_at=datetime.fromisoformat(user["created_at"]) if isinstance(user["created_at"], str) else user["created_at"]
+    )
+    
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user=user_response
+    )
+
+@api_router.get("/auth/me", response_model=UserResponse)
+async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get current user information"""
+    current_user = await get_current_user(credentials, db)
+    
+    return UserResponse(
+        id=current_user["id"],
+        name=current_user["name"],
+        email=current_user["email"],
+        phone=current_user.get("phone"),
+        role=UserRole(current_user["role"]),
+        addresses=current_user.get("addresses", []),
+        wishlist=current_user.get("wishlist", []),
+        created_at=datetime.fromisoformat(current_user["created_at"]) if isinstance(current_user["created_at"], str) else current_user["created_at"]
+    )
+
+@api_router.put("/auth/profile", response_model=UserResponse)
+async def update_profile(
+    update_data: dict,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update user profile"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Fields that can be updated
+    allowed_fields = ["name", "phone"]
+    update_dict = {k: v for k, v in update_data.items() if k in allowed_fields}
+    update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+    
+    if update_dict:
+        await db.users.update_one(
+            {"id": current_user["id"]},
+            {"$set": update_dict}
+        )
+    
+    # Get updated user
+    updated_user = await db.users.find_one({"id": current_user["id"]})
+    
+    return UserResponse(
+        id=updated_user["id"],
+        name=updated_user["name"],
+        email=updated_user["email"],
+        phone=updated_user.get("phone"),
+        role=UserRole(updated_user["role"]),
+        addresses=updated_user.get("addresses", []),
+        wishlist=updated_user.get("wishlist", []),
+        created_at=datetime.fromisoformat(updated_user["created_at"]) if isinstance(updated_user["created_at"], str) else updated_user["created_at"]
+    )
+
+# User Routes (Protected)
+@api_router.get("/users/{user_id}", response_model=UserResponse)
+async def get_user(
+    user_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get user by ID (protected route)"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Users can only see their own profile, admins can see any
+    if current_user["id"] != user_id and current_user["role"] != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Not authorized to view this profile"
+        )
+    
     user = await db.users.find_one({"id": user_id})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-    return User(**parse_from_mongo(user))
+    
+    return UserResponse(
+        id=user["id"],
+        name=user["name"],
+        email=user["email"],
+        phone=user.get("phone"),
+        role=UserRole(user["role"]),
+        addresses=user.get("addresses", []),
+        wishlist=user.get("wishlist", []),
+        created_at=datetime.fromisoformat(user["created_at"]) if isinstance(user["created_at"], str) else user["created_at"]
+    )
 
 # Review Routes
 @api_router.post("/reviews", response_model=Review)
@@ -378,6 +619,42 @@ async def get_chat_history(session_id: str):
     except Exception as e:
         logger.error(f"Error fetching chat history: {str(e)}")
         return []
+
+# Admin initialization
+@api_router.post("/init-admin")
+async def init_admin():
+    """Initialize admin user (use only once)"""
+    # Check if admin already exists
+    existing_admin = await db.users.find_one({"role": "admin"})
+    if existing_admin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Admin user already exists"
+        )
+    
+    # Create admin user
+    admin_data = {
+        "id": str(uuid.uuid4()),
+        "name": "Admin",
+        "email": "admin@mithaasdelights.com",
+        "phone": "+91 8989549544",
+        "hashed_password": get_password_hash("admin123"),  # Change this password!
+        "role": UserRole.ADMIN.value,
+        "addresses": [],
+        "wishlist": [],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.users.insert_one(admin_data)
+    
+    return {
+        "message": "Admin user created successfully",
+        "email": "admin@mithaasdelights.com",
+        "password": "admin123",
+        "warning": "Please change this password immediately!"
+    }
 
 # Initialize sample data
 @api_router.post("/init-sample-data")
