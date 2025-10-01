@@ -15,6 +15,8 @@ import { AuthModals } from "./components/auth/AuthModel";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
+import { TermsAndConditions, PrivacyPolicy } from "./pages/Policies";
+import { ProductDetailPage } from "./pages/ProductDetailPage";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
 
@@ -101,6 +103,10 @@ const Header = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState('login');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [searchLoading, setSearchLoading] = useState(false);
   const { cartCount } = useCart();
   const { user, logout, isAuthenticated, loading } = useAuth();
 
@@ -112,6 +118,25 @@ const Header = () => {
   const handleLogout = () => {
     logout();
     toast.success('Logged out successfully');
+  };
+
+  const handleSearch = async (query) => {
+    setSearchQuery(query);
+    if (query.length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setSearchLoading(true);
+    try {
+      const response = await axios.get(`${API}/products/search?q=${encodeURIComponent(query)}`);
+      setSearchResults(response.data);
+    } catch (error) {
+      console.error('Search error:', error);
+      toast.error('Search failed');
+    } finally {
+      setSearchLoading(false);
+    }
   };
 
   return (
@@ -133,17 +158,82 @@ const Header = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-6">
-            <a href="#home" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
-            <a href="#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
-            <a href="#about" className="text-gray-700 hover:text-orange-600 transition-colors">About</a>
-            <a href="#contact" className="text-gray-700 hover:text-orange-600 transition-colors">Contact</a>
+            <a href="/" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
+            <a href="/#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
+            <a href="/#about" className="text-gray-700 hover:text-orange-600 transition-colors">About</a>
+            <a href="/#contact" className="text-gray-700 hover:text-orange-600 transition-colors">Contact</a>
           </nav>
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-3">
-            <Button variant="ghost" size="sm" data-testid="search-button">
-              <Search className="w-5 h-5" />
-            </Button>
+            <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" data-testid="search-button">
+                  <Search className="w-5 h-5" />
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Search Products</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4">
+                  <Input
+                    placeholder="Search for sweets, namkeen, or snacks..."
+                    value={searchQuery}
+                    onChange={(e) => handleSearch(e.target.value)}
+                    autoFocus
+                    data-testid="search-input"
+                  />
+                  {searchLoading && (
+                    <div className="text-center py-4">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+                    </div>
+                  )}
+                  {!searchLoading && searchResults.length > 0 && (
+                    <div className="max-h-96 overflow-y-auto space-y-2">
+                      {searchResults.map((product) => (
+                        <div
+                          key={product.id}
+                          className="flex items-center space-x-4 p-3 hover:bg-orange-50 rounded-lg cursor-pointer transition-colors"
+                          onClick={() => {
+                            setSearchOpen(false);
+                            window.location.href = `/#products`;
+                          }}
+                        >
+                          <img
+                            src={product.image_url}
+                            alt={product.name}
+                            className="w-16 h-16 object-cover rounded"
+                          />
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-gray-800">{product.name}</h4>
+                            <p className="text-sm text-gray-600 line-clamp-1">{product.description}</p>
+                            <div className="flex items-center space-x-2 mt-1">
+                              {product.variants && product.variants.length > 0 && (
+                                <span className="text-sm font-semibold text-orange-600">
+                                  From ₹{Math.min(...product.variants.map(v => v.price))}
+                                </span>
+                              )}
+                              <Badge variant="outline" className="text-xs">{product.category}</Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {!searchLoading && searchQuery.length >= 2 && searchResults.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      No products found for "{searchQuery}"
+                    </div>
+                  )}
+                  {searchQuery.length > 0 && searchQuery.length < 2 && (
+                    <div className="text-center py-4 text-gray-400 text-sm">
+                      Type at least 2 characters to search
+                    </div>
+                  )}
+                </div>
+              </DialogContent>
+            </Dialog>
 
             {/* Authentication Section */}
             {loading ? (
@@ -296,9 +386,24 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
 
+  // Get the minimum price from variants
+  const getMinPrice = () => {
+    if (product.variants && product.variants.length > 0) {
+      return Math.min(...product.variants.map(v => v.price));
+    }
+    return product.price || 0;
+  };
+
+  const handleViewDetails = () => {
+    window.location.href = `/product/${product.id}`;
+  };
+
   return (
     <Card className="group overflow-hidden hover:shadow-lg transition-shadow duration-300 bg-white border border-amber-100" data-testid="product-card">
-      <div className="relative overflow-hidden">
+      <div 
+        className="relative overflow-hidden cursor-pointer"
+        onClick={handleViewDetails}
+      >
         <img 
           src={product.image_url} 
           alt={product.name}
@@ -314,31 +419,43 @@ const ProductCard = ({ product }) => {
             Featured
           </Badge>
         )}
+        {product.is_sold_out && (
+          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
+            <Badge className="bg-red-600 text-white">SOLD OUT</Badge>
+          </div>
+        )}
       </div>
       <CardContent className="p-4">
-        <h3 className="font-semibold text-lg text-gray-800 mb-2" data-testid="product-name">{product.name}</h3>
+        <h3 
+          className="font-semibold text-lg text-gray-800 mb-2 cursor-pointer hover:text-orange-600 transition-colors" 
+          data-testid="product-name"
+          onClick={handleViewDetails}
+        >
+          {product.name}
+        </h3>
         <p className="text-gray-600 text-sm mb-3 line-clamp-2">{product.description}</p>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center space-x-2">
-            <span className="text-xl font-bold text-orange-600" data-testid="product-price">₹{product.price}</span>
-            {product.original_price && (
-              <span className="text-sm text-gray-400 line-through">₹{product.original_price}</span>
-            )}
+            <span className="text-xl font-bold text-orange-600" data-testid="product-price">
+              From ₹{getMinPrice()}
+            </span>
           </div>
-          <span className="text-sm text-gray-500">{product.weight}</span>
+          {product.variants && product.variants.length > 0 && (
+            <span className="text-xs text-gray-500">{product.variants.length} variants</span>
+          )}
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1">
             <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-            <span className="text-sm text-gray-600">4.5 (120)</span>
+            <span className="text-sm text-gray-600">{product.rating || 4.5} ({product.review_count || 0})</span>
           </div>
           <Button 
             size="sm" 
-            onClick={() => addToCart(product)}
+            onClick={handleViewDetails}
             className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
-            data-testid="add-to-cart-button"
+            data-testid="view-details-button"
           >
-            Add to Cart
+            View Details
           </Button>
         </div>
       </CardContent>
@@ -717,6 +834,10 @@ const Footer = () => {
             <p className="text-gray-400 mb-4">
               Premium Indian sweets and snacks crafted with love and tradition.
             </p>
+            <div className="bg-orange-900/30 px-3 py-2 rounded-lg">
+              <p className="text-xs font-semibold text-orange-300 mb-1">FSSAI License</p>
+              <p className="text-sm text-gray-300">12345678901234</p>
+            </div>
           </div>
           
           <div>
@@ -730,12 +851,12 @@ const Footer = () => {
           </div>
           
           <div>
-            <h4 className="font-semibold mb-4">Categories</h4>
+            <h4 className="font-semibold mb-4">Legal</h4>
             <ul className="space-y-2 text-gray-400">
-              <li><a href="#" className="hover:text-orange-400 transition-colors">Mithai</a></li>
-              <li><a href="#" className="hover:text-orange-400 transition-colors">Namkeen</a></li>
-              <li><a href="#" className="hover:text-orange-400 transition-colors">Bengali Sweets</a></li>
-              <li><a href="#" className="hover:text-orange-400 transition-colors">Festival Specials</a></li>
+              <li><a href="/terms" className="hover:text-orange-400 transition-colors">Terms & Conditions</a></li>
+              <li><a href="/privacy" className="hover:text-orange-400 transition-colors">Privacy Policy</a></li>
+              <li><a href="/track-order" className="hover:text-orange-400 transition-colors">Track Order</a></li>
+              <li><a href="#contact" className="hover:text-orange-400 transition-colors">Contact Us</a></li>
             </ul>
           </div>
           
@@ -743,7 +864,7 @@ const Footer = () => {
             <h4 className="font-semibold mb-4">Connect</h4>
             <ul className="space-y-2 text-gray-400">
               <li><a href="https://www.instagram.com/mithaasdelightsofficial?igsh=aW85Z2h6bTEwazJv" className="hover:text-orange-400 transition-colors">Instagram</a></li>
-              <li><a href="#" className="hover:text-orange-400 transition-colors">WhatsApp</a></li>
+              <li><a href="https://wa.me/918989549544" target="_blank" rel="noopener noreferrer" className="hover:text-orange-400 transition-colors">WhatsApp</a></li>
               <li><a href="#" className="hover:text-orange-400 transition-colors">Facebook</a></li>
               <li><a href="#" className="hover:text-orange-400 transition-colors">Twitter</a></li>
             </ul>
@@ -752,6 +873,7 @@ const Footer = () => {
         
         <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
           <p>&copy; 2025 Mithaas Delights. All rights reserved. Made with ❤️ in India.</p>
+          <p className="text-xs mt-2">Certified by Food Safety and Standards Authority of India</p>
         </div>
       </div>
     </footer>
@@ -776,11 +898,17 @@ const ProfilePage = () => {
 
   const fetchOrders = async () => {
     try {
-      const response = await axios.get(`${API}/orders/user/my-orders`);
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/orders/user/my-orders`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
       setOrders(response.data);
     } catch (error) {
       console.error('Error fetching orders:', error);
-      toast.error('Failed to fetch orders');
+      toast.error('Failed to fetch orders. Please login again.');
     } finally {
       setLoading(false);
     }
@@ -789,14 +917,13 @@ const ProfilePage = () => {
   const fetchWishlist = async () => {
     try {
       setLoading(true);
-      // Fetch wishlist products based on user's wishlist IDs
-      if (user?.wishlist && user.wishlist.length > 0) {
-        const productPromises = user.wishlist.map(productId => 
-          axios.get(`${API}/products/${productId}`)
-        );
-        const responses = await Promise.all(productPromises);
-        setWishlistProducts(responses.map(response => response.data));
-      }
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/wishlist`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      setWishlistProducts(response.data);
     } catch (error) {
       console.error('Error fetching wishlist:', error);
       toast.error('Failed to fetch wishlist');
@@ -898,29 +1025,86 @@ const ProfilePage = () => {
                       </div>
                     ) : orders.length === 0 ? (
                       <div className="text-center py-8">
-                        <p className="text-gray-500">No orders found</p>
+                        <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                        <p className="text-gray-500 mb-4">No orders found</p>
+                        <Button 
+                          onClick={() => window.location.href = '/#products'}
+                          className="bg-orange-500 hover:bg-orange-600"
+                        >
+                          Start Shopping
+                        </Button>
                       </div>
                     ) : (
                       <div className="space-y-4">
                         {orders.map((order) => (
-                          <div key={order.id} className="border rounded-lg p-4">
-                            <div className="flex justify-between items-start mb-2">
+                          <div key={order.id} className="border rounded-lg p-4 bg-white shadow-sm">
+                            <div className="flex justify-between items-start mb-3">
                               <div>
-                                <p className="font-semibold">Order #{order.id.slice(0, 8)}</p>
+                                <p className="font-semibold text-lg">Order #{order.id.slice(0, 8)}</p>
                                 <p className="text-sm text-gray-600">
-                                  {new Date(order.created_at).toLocaleDateString()}
+                                  Placed on {new Date(order.created_at).toLocaleString()}
                                 </p>
                               </div>
                               <Badge className={`${
                                 order.status === 'delivered' ? 'bg-green-100 text-green-700' :
                                 order.status === 'cancelled' ? 'bg-red-100 text-red-700' :
+                                order.status === 'out_for_delivery' ? 'bg-blue-100 text-blue-700' :
                                 'bg-orange-100 text-orange-700'
                               }`}>
-                                {order.status.replace('_', ' ').toUpperCase()}
+                                {order.status.replace(/_/g, ' ').toUpperCase()}
                               </Badge>
                             </div>
-                            <p className="text-lg font-bold text-orange-600">₹{order.total_amount}</p>
-                            <p className="text-sm text-gray-600">{order.items.length} items</p>
+                            
+                            <div className="space-y-2 mb-3">
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">Payment Method:</span>
+                                <span className="text-sm font-medium">{order.payment_method.toUpperCase()}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span className="text-sm text-gray-600">Payment Status:</span>
+                                <Badge variant="outline" className={`text-xs ${
+                                  order.payment_status === 'completed' ? 'border-green-500 text-green-700' : 
+                                  order.payment_status === 'failed' ? 'border-red-500 text-red-700' :
+                                  'border-orange-500 text-orange-700'
+                                }`}>
+                                  {order.payment_status}
+                                </Badge>
+                              </div>
+                              {order.discount_amount > 0 && (
+                                <div className="flex justify-between">
+                                  <span className="text-sm text-gray-600">Discount Applied:</span>
+                                  <span className="text-sm text-green-600 font-medium">-₹{order.discount_amount}</span>
+                                </div>
+                              )}
+                            </div>
+
+                            <div className="border-t pt-3 mb-3">
+                              <p className="text-sm text-gray-600 mb-1">Items: {order.items.length}</p>
+                              <div className="flex justify-between items-center">
+                                <span className="text-sm font-medium">Total Amount:</span>
+                                <span className="text-xl font-bold text-orange-600">₹{order.final_amount || order.total_amount}</span>
+                              </div>
+                            </div>
+
+                            {order.whatsapp_link && (
+                              <div className="border-t pt-3">
+                                <a
+                                  href={order.whatsapp_link}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center justify-center w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+                                >
+                                  <Phone className="w-4 h-4 mr-2" />
+                                  Contact via WhatsApp
+                                </a>
+                              </div>
+                            )}
+
+                            <div className="border-t pt-3 mt-3">
+                              <p className="text-xs text-gray-500">
+                                Delivery Address: {order.delivery_address}
+                              </p>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1120,7 +1304,10 @@ function App() {
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Home />} />
+              <Route path="/product/:productId" element={<ProductDetailPage Header={Header} Footer={Footer} />} />
               <Route path="/track-order" element={<OrderTracking />} />
+              <Route path="/terms" element={<TermsAndConditions />} />
+              <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route 
                 path="/profile" 
                 element={
