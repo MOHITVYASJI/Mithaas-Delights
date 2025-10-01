@@ -327,26 +327,12 @@ def parse_from_mongo(item):
         item['end_date'] = datetime.fromisoformat(item['end_date'])
     return item
 
-# Generate WhatsApp Link with detailed order info
+# Generate WhatsApp Link
 def generate_whatsapp_link(order: Order) -> str:
-    """Generate WhatsApp link for order confirmation with full details"""
+    """Generate WhatsApp link for order confirmation"""
     whatsapp_number = os.environ.get('WHATSAPP_NUMBER', '+918989549544')
-    
-    # Build detailed message with item breakdown
-    items_text = ""
-    for item in order.items:
-        items_text += f"\n- {item.variant_weight} x {item.quantity} = ₹{item.price * item.quantity}"
-    
-    message = (
-        f"Hello! I have placed an order.\n\n"
-        f"Order ID: {order.id[:8]}\n"
-        f"Items:{items_text}\n\n"
-        f"Total Amount: ₹{order.final_amount}\n"
-        f"Delivery Address: {order.delivery_address}\n\n"
-        f"Please confirm my order. Thank you!"
-    )
-    
-    encoded_message = message.replace('\n', '%0A').replace(' ', '%20')
+    message = f"Hello! I have placed an order (ID: {order.id[:8]}). Please confirm my order of ₹{order.final_amount}."
+    encoded_message = message.replace(' ', '%20')
     return f"https://wa.me/{whatsapp_number.replace('+', '')}?text={encoded_message}"
 
 # ==================== ROUTES ====================
@@ -969,18 +955,13 @@ async def register(user_data: UserCreate):
 
 @api_router.post("/auth/login", response_model=TokenResponse)
 async def login(credentials: UserLogin):
-    """Login user and return JWT token (supports both email and phone)"""
-    # Find user by email or phone
+    """Login user and return JWT token"""
+    # Find user by email
     user = await db.users.find_one({"email": credentials.email})
-    
-    # If not found by email, try phone
-    if not user:
-        user = await db.users.find_one({"phone": credentials.email})
-    
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email/phone or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -988,7 +969,7 @@ async def login(credentials: UserLogin):
     if not verify_password(credentials.password, user["hashed_password"]):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect email/phone or password",
+            detail="Incorrect email or password",
             headers={"WWW-Authenticate": "Bearer"},
         )
     
@@ -1266,102 +1247,6 @@ async def delete_review(
 
 # ==================== CHATBOT ROUTES ====================
 
-# Contact Form Model
-class ContactMessage(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    email: EmailStr
-    subject: str
-    message: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    is_read: bool = False
-
-class ContactMessageCreate(BaseModel):
-    name: str
-    email: EmailStr
-    subject: str
-    message: str
-
-@api_router.post("/contact")
-async def submit_contact_form(contact_data: ContactMessageCreate):
-    """Submit contact form message"""
-    try:
-        contact_message = ContactMessage(**contact_data.dict())
-        await db.contact_messages.insert_one(prepare_for_mongo(contact_message.dict()))
-        
-        return {
-            "success": True,
-            "message": "Thank you for contacting us! We will get back to you soon.",
-            "id": contact_message.id
-        }
-    except Exception as e:
-        logger.error(f"Contact form error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to submit contact form")
-
-@api_router.get("/contact/messages")
-async def get_contact_messages(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Get all contact messages (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    messages = await db.contact_messages.find().sort("created_at", -1).to_list(length=None)
-    return [ContactMessage(**parse_from_mongo(msg)) for msg in messages]
-
-@api_router.put("/orders/{order_id}/cancel")
-async def cancel_order(
-    order_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Cancel order (within 1 hour for users, anytime for admin)"""
-    current_user = await get_current_user(credentials, db)
-    
-    # Get order
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    # Check ownership or admin
-    is_admin = current_user.get("role") == "admin"
-    is_owner = order["user_id"] == current_user["id"]
-    
-    if not (is_admin or is_owner):
-        raise HTTPException(status_code=403, detail="Not authorized to cancel this order")
-    
-    # Check if already cancelled or delivered
-    if order["status"] in ["cancelled", "delivered"]:
-        raise HTTPException(status_code=400, detail=f"Cannot cancel order with status: {order['status']}")
-    
-    # Check 1-hour window for regular users
-    if not is_admin:
-        order_time = datetime.fromisoformat(order["created_at"]) if isinstance(order["created_at"], str) else order["created_at"]
-        time_elapsed = datetime.now(timezone.utc) - order_time
-        
-        if time_elapsed > timedelta(hours=1):
-            raise HTTPException(
-                status_code=400,
-                detail="Order can only be cancelled within 1 hour of placement. Please contact admin for assistance."
-            )
-    
-    # Update order status
-    update_data = {
-        "status": OrderStatus.CANCELLED.value,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    # If payment was completed, mark for refund
-    if order.get("payment_status") == PaymentStatus.COMPLETED.value:
-        update_data["payment_status"] = PaymentStatus.REFUNDED.value
-    
-    await db.orders.update_one(
-        {"id": order_id},
-        {"$set": update_data}
-    )
-    
-    return {
-        "success": True,
-        "message": "Order cancelled successfully" + (" and refund initiated" if order.get("payment_status") == PaymentStatus.COMPLETED.value else ""),
-        "can_reorder": True
-    }
-
 @api_router.post("/chat")
 async def chat_with_bot(chat_request: ChatRequest):
     try:
@@ -1374,21 +1259,8 @@ async def chat_with_bot(chat_request: ChatRequest):
         genai.configure(api_key=gemini_api_key)
         model = genai.GenerativeModel("gemini-2.0-flash-exp")
        
-        # Check if user is asking about their orders
-        order_context = ""
-        if any(keyword in chat_request.message.lower() for keyword in ['my order', 'my orders', 'order status', 'track order', 'where is my order']):
-            try:
-                # Try to get recent orders for this session
-                recent_orders = await db.orders.find().sort("created_at", -1).limit(5).to_list(length=5)
-                if recent_orders:
-                    order_context = "\n\nRecent Orders:\n"
-                    for order in recent_orders:
-                        order_context += f"- Order #{order['id'][:8]}: Status: {order['status']}, Amount: ₹{order.get('final_amount', order['total_amount'])}\n"
-            except Exception as e:
-                logger.error(f"Error fetching orders for chatbot: {str(e)}")
-        
         # Create system message for Mithaas Delights context
-        system_message = f"""You are a helpful customer support assistant for Mithaas Delights, a premium Indian sweets and snacks online store. 
+        system_message = """You are a helpful customer support assistant for Mithaas Delights, a premium Indian sweets and snacks online store. 
 
 About Mithaas Delights:
 - We sell authentic Indian sweets (mithai), savory snacks (namkeen), laddus, Bengali sweets, dry fruit sweets, and festival specials
@@ -1403,7 +1275,7 @@ You should help customers with:
 - Order placement guidance
 - Delivery and payment information
 - General FAQs about our products and services
-- Order tracking assistance{order_context}
+- Order tracking assistance
 
 Always be friendly, helpful, and promote our premium quality products. If you don't know specific product details, suggest the customer browse our catalog or contact our support team."""
         

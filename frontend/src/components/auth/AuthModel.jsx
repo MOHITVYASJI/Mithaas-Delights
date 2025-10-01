@@ -17,6 +17,7 @@ export const AuthModals = ({ isOpen, onClose, initialMode = 'login' }) => {
   const [formData, setFormData] = useState({
     name: '',
     email: '',
+    phone: '',
     password: '',
   });
   const [error, setError] = useState('');
@@ -41,12 +42,12 @@ export const AuthModals = ({ isOpen, onClose, initialMode = 'login' }) => {
       if (mode === 'login') {
         result = await login(formData.email, formData.password);
       } else {
-        result = await register(formData.name, formData.email, formData.password);
+        result = await register(formData.name, formData.email, formData.password, formData.phone);
       }
 
       if (result.success) {
         onClose();
-        setFormData({ name: '', email: '', password: '' });
+        setFormData({ name: '', email: '', phone: '', password: '' });
       } else {
         setError(result.error);
       }
@@ -98,14 +99,29 @@ export const AuthModals = ({ isOpen, onClose, initialMode = 'login' }) => {
               />
             </div>
           )}
+          {mode === 'register' && (
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone</Label>
+              <Input
+                id="phone"
+                name="phone"
+                type="tel"
+                placeholder="Enter your phone number"
+                value={formData.phone}
+                onChange={handleChange}
+                required
+                data-testid="auth-phone-input"
+              />
+            </div>
+          )}
 
           <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+            <Label htmlFor="email">{mode === 'login' ? 'Email or Phone' : 'Email'}</Label>
             <Input
               id="email"
               name="email"
-              type="email"
-              placeholder="Enter your email"
+              type="text"
+              placeholder={mode === 'login' ? "Enter your email or phone" : "Enter your email"}
               value={formData.email}
               onChange={handleChange}
               required

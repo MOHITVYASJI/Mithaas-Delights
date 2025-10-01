@@ -385,6 +385,41 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 // Product Card Component
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
+  const { user, isAuthenticated } = useAuth();
+  const [isInWishlist, setIsInWishlist] = useState(false);
+
+  useEffect(() => {
+    if (user && user.wishlist) {
+      setIsInWishlist(user.wishlist.includes(product.id));
+    }
+  }, [user, product.id]);
+
+  const toggleWishlist = async () => {
+    if (!isAuthenticated) {
+      toast.error('Please login to add to wishlist');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      if (isInWishlist) {
+        await axios.delete(`${API}/wishlist/remove/${product.id}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        toast.success('Removed from wishlist');
+        setIsInWishlist(false);
+      } else {
+        await axios.post(`${API}/wishlist/add/${product.id}`, {}, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        toast.success('Added to wishlist');
+        setIsInWishlist(true);
+      }
+    } catch (error) {
+      console.error('Wishlist error:', error);
+      toast.error('Failed to update wishlist');
+    }
+  };
 
   // Get the minimum price from variants
   const getMinPrice = () => {
@@ -424,6 +459,18 @@ const ProductCard = ({ product }) => {
             <Badge className="bg-red-600 text-white">SOLD OUT</Badge>
           </div>
         )}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="absolute bottom-2 right-2 bg-white/90 hover:bg-white"
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleWishlist();
+          }}
+          data-testid="wishlist-toggle-button"
+        >
+          <Heart className={`w-5 h-5 ${isInWishlist ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+        </Button>
       </div>
       <CardContent className="p-4">
         <h3 
@@ -725,6 +772,30 @@ const AboutSection = () => {
 
 // Contact Section
 const ContactSection = () => {
+  const [contactData, setContactData] = useState({
+    name: '',
+    email: '',
+    subject: '',
+    message: ''
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleContactSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      await axios.post(`${API}/contact`, contactData);
+      toast.success('Message sent successfully! We will get back to you soon.');
+      setContactData({ name: '', email: '', subject: '', message: '' });
+    } catch (error) {
+      console.error('Contact form error:', error);
+      toast.error('Failed to send message. Please try again.');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <section className="py-20 bg-white" id="contact">
       <div className="container mx-auto px-4">
@@ -792,24 +863,50 @@ const ContactSection = () => {
             <CardHeader>
               <CardTitle>Send us a Message</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <Input placeholder="Your Name" data-testid="contact-name-input" />
-                <Input placeholder="Your Email" type="email" data-testid="contact-email-input" />
-              </div>
-              <Input placeholder="Subject" data-testid="contact-subject-input" />
-              <textarea 
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-                rows="4"
-                placeholder="Your Message"
-                data-testid="contact-message-input"
-              ></textarea>
-              <Button 
-                className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
-                data-testid="send-message-button"
-              >
-                Send Message
-              </Button>
+            <CardContent>
+              <form onSubmit={handleContactSubmit} className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <Input 
+                    placeholder="Your Name" 
+                    value={contactData.name}
+                    onChange={(e) => setContactData({...contactData, name: e.target.value})}
+                    required
+                    data-testid="contact-name-input" 
+                  />
+                  <Input 
+                    placeholder="Your Email" 
+                    type="email" 
+                    value={contactData.email}
+                    onChange={(e) => setContactData({...contactData, email: e.target.value})}
+                    required
+                    data-testid="contact-email-input" 
+                  />
+                </div>
+                <Input 
+                  placeholder="Subject" 
+                  value={contactData.subject}
+                  onChange={(e) => setContactData({...contactData, subject: e.target.value})}
+                  required
+                  data-testid="contact-subject-input" 
+                />
+                <textarea 
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+                  rows="4"
+                  placeholder="Your Message"
+                  value={contactData.message}
+                  onChange={(e) => setContactData({...contactData, message: e.target.value})}
+                  required
+                  data-testid="contact-message-input"
+                ></textarea>
+                <Button 
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700"
+                  data-testid="send-message-button"
+                >
+                  {submitting ? 'Sending...' : 'Send Message'}
+                </Button>
+              </form>
             </CardContent>
           </Card>
         </div>
@@ -887,6 +984,11 @@ const ProfilePage = () => {
   const [orders, setOrders] = useState([]);
   const [wishlistProducts, setWishlistProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileData, setProfileData] = useState({
+    name: user?.name || '',
+    phone: user?.phone || ''
+  });
 
   useEffect(() => {
     if (activeTab === 'orders') {
@@ -895,6 +997,14 @@ const ProfilePage = () => {
       fetchWishlist();
     }
   }, [activeTab]);
+  useEffect(() => {
+    if (user) {
+      setProfileData({
+        name: user.name || '',
+        phone: user.phone || ''
+      });
+    }
+  }, [user]);
 
   const fetchOrders = async () => {
     try {
@@ -929,6 +1039,60 @@ const ProfilePage = () => {
       toast.error('Failed to fetch wishlist');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleProfileUpdate = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.put(`${API}/auth/profile`, profileData, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      toast.success('Profile updated successfully');
+      setIsEditingProfile(false);
+      // Refresh user data
+      window.location.reload();
+    } catch (error) {
+      console.error('Error updating profile:', error);
+      toast.error('Failed to update profile');
+    }
+  };
+
+  const handleRemoveFromWishlist = async (productId) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.delete(`${API}/wishlist/remove/${productId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      toast.success('Removed from wishlist');
+      fetchWishlist();
+    } catch (error) {
+      console.error('Error removing from wishlist:', error);
+      toast.error('Failed to remove from wishlist');
+    }
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to cancel this order?')) {
+      return;
+    }
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.put(`${API}/orders/${orderId}/cancel`, {}, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      toast.success(response.data.message);
+      fetchOrders();
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      toast.error(error.response?.data?.detail || 'Failed to cancel order');
     }
   };
 
@@ -991,24 +1155,66 @@ const ProfilePage = () => {
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-sm font-medium mb-2">Name</label>
-                        <Input value={user?.name || ''} readOnly />
+                        <Input 
+                          value={profileData.name} 
+                          onChange={(e) => setProfileData({...profileData, name: e.target.value})}
+                          disabled={!isEditingProfile}
+                          data-testid="profile-name-input"
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Email</label>
-                        <Input value={user?.email || ''} readOnly />
+                        <Input value={user?.email || ''} readOnly className="bg-gray-50" />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Phone</label>
-                        <Input value={user?.phone || 'Not provided'} readOnly />
+                        <Input 
+                          value={profileData.phone} 
+                          onChange={(e) => setProfileData({...profileData, phone: e.target.value})}
+                          disabled={!isEditingProfile}
+                          placeholder="Add phone number"
+                          data-testid="profile-phone-input"
+                        />
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-2">Role</label>
-                        <Input value={user?.role || ''} readOnly />
+                        <Input value={user?.role || ''} readOnly className="bg-gray-50" />
                       </div>
                     </div>
-                    <Button className="bg-orange-500 hover:bg-orange-600">
-                      Edit Profile
-                    </Button>
+                    <div className="flex gap-3">
+                      {!isEditingProfile ? (
+                        <Button 
+                          className="bg-orange-500 hover:bg-orange-600"
+                          onClick={() => setIsEditingProfile(true)}
+                          data-testid="edit-profile-button"
+                        >
+                          Edit Profile
+                        </Button>
+                      ) : (
+                        <>
+                          <Button 
+                            className="bg-orange-500 hover:bg-orange-600"
+                            onClick={handleProfileUpdate}
+                            data-testid="save-profile-button"
+                          >
+                            Save Changes
+                          </Button>
+                          <Button 
+                            variant="outline"
+                            onClick={() => {
+                              setIsEditingProfile(false);
+                              setProfileData({
+                                name: user?.name || '',
+                                phone: user?.phone || ''
+                              });
+                            }}
+                            data-testid="cancel-edit-button"
+                          >
+                            Cancel
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
               )}
@@ -1056,6 +1262,15 @@ const ProfilePage = () => {
                             </div>
                             
                             <div className="space-y-2 mb-3">
+                              <div className="border-t pt-3">
+                                <p className="text-sm text-gray-600 mb-2 font-medium">Order Items:</p>
+                                {order.items.map((item, idx) => (
+                                  <div key={idx} className="flex justify-between text-sm py-1">
+                                    <span className="text-gray-700">{item.variant_weight} × {item.quantity}</span>
+                                    <span className="font-medium">₹{(item.price * item.quantity).toFixed(2)}</span>
+                                  </div>
+                                ))}
+                              </div>
                               <div className="flex justify-between">
                                 <span className="text-sm text-gray-600">Payment Method:</span>
                                 <span className="text-sm font-medium">{order.payment_method.toUpperCase()}</span>
@@ -1065,6 +1280,7 @@ const ProfilePage = () => {
                                 <Badge variant="outline" className={`text-xs ${
                                   order.payment_status === 'completed' ? 'border-green-500 text-green-700' : 
                                   order.payment_status === 'failed' ? 'border-red-500 text-red-700' :
+                                  order.payment_status === 'refunded' ? 'border-blue-500 text-blue-700' :
                                   'border-orange-500 text-orange-700'
                                 }`}>
                                   {order.payment_status}
@@ -1079,26 +1295,36 @@ const ProfilePage = () => {
                             </div>
 
                             <div className="border-t pt-3 mb-3">
-                              <p className="text-sm text-gray-600 mb-1">Items: {order.items.length}</p>
                               <div className="flex justify-between items-center">
                                 <span className="text-sm font-medium">Total Amount:</span>
                                 <span className="text-xl font-bold text-orange-600">₹{order.final_amount || order.total_amount}</span>
                               </div>
                             </div>
 
-                            {order.whatsapp_link && (
-                              <div className="border-t pt-3">
+                            <div className="flex gap-2">
+                              {order.whatsapp_link && (
                                 <a
                                   href={order.whatsapp_link}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="inline-flex items-center justify-center w-full bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors"
+                                  className="flex-1 inline-flex items-center justify-center bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg transition-colors text-sm"
                                 >
                                   <Phone className="w-4 h-4 mr-2" />
                                   Contact via WhatsApp
                                 </a>
-                              </div>
-                            )}
+                              )}
+                              {order.status !== 'cancelled' && order.status !== 'delivered' && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleCancelOrder(order.id)}
+                                  className="text-red-600 hover:text-red-700 border-red-300"
+                                  data-testid="cancel-order-button"
+                                >
+                                  Cancel Order
+                                </Button>
+                              )}
+                            </div>
 
                             <div className="border-t pt-3 mt-3">
                               <p className="text-xs text-gray-500">
@@ -1131,7 +1357,42 @@ const ProfilePage = () => {
                     ) : (
                       <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
                         {wishlistProducts.map((product) => (
-                          <ProductCard key={product.id} product={product} />
+                          <Card key={product.id} className="relative">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="absolute top-2 right-2 z-10 text-red-500 hover:text-red-700"
+                              onClick={() => handleRemoveFromWishlist(product.id)}
+                              data-testid="remove-wishlist-button"
+                            >
+                              <X className="w-4 h-4" />
+                            </Button>
+                            <div className="relative overflow-hidden">
+                              <img
+                                src={product.image_url}
+                                alt={product.name}
+                                className="w-full h-48 object-cover"
+                              />
+                            </div>
+                            <CardContent className="p-4">
+                              <h3 className="font-semibold text-lg mb-2">{product.name}</h3>
+                              <p className="text-gray-600 text-sm mb-3 line-clamp-2">{product.description}</p>
+                              <div className="flex items-center justify-between">
+                                <span className="text-xl font-bold text-orange-600">
+                                  From ₹{product.variants && product.variants.length > 0 
+                                    ? Math.min(...product.variants.map(v => v.price))
+                                    : product.price || 0}
+                                </span>
+                                <Button
+                                  size="sm"
+                                  onClick={() => window.location.href = `/product/${product.id}`}
+                                  className="bg-orange-500 hover:bg-orange-600"
+                                >
+                                  View
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
                         ))}
                       </div>
                     )}

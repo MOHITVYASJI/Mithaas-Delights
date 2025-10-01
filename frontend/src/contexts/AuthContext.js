@@ -52,12 +52,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const register = async (name, email, password) => {
+  const register = async (name, email, password, phone) => {
     try {
       const response = await axios.post(`${API_URL}/auth/register`, {
         name,
         email,
         password,
+        phone,
       });
       const { access_token, user } = response.data;
       setToken(access_token);
