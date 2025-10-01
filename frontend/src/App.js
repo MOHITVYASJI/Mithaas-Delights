@@ -17,6 +17,10 @@ import { Toaster } from "./components/ui/sonner";
 import { toast } from "sonner";
 import { TermsAndConditions, PrivacyPolicy } from "./pages/Policies";
 import { ProductDetailPage } from "./pages/ProductDetailPage";
+import { BulkOrderPage } from "./pages/BulkOrderPage";
+import { MediaGalleryPage } from "./pages/MediaGalleryPage";
+import { OrderSuccessPage } from "./pages/OrderSuccessPage";
+import { OrderTrackingPage } from "./pages/OrderTrackingPage";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
 
@@ -1567,6 +1571,10 @@ function App() {
               <Route path="/" element={<Home />} />
               <Route path="/product/:productId" element={<ProductDetailPage Header={Header} Footer={Footer} />} />
               <Route path="/track-order" element={<OrderTracking />} />
+              <Route path="/track-order/:orderId" element={<OrderTrackingPage />} />
+              <Route path="/order-success" element={<OrderSuccessPage />} />
+              <Route path="/bulk-orders" element={<BulkOrderPage />} />
+              <Route path="/gallery" element={<MediaGalleryPage />} />
               <Route path="/terms" element={<TermsAndConditions />} />
               <Route path="/privacy" element={<PrivacyPolicy />} />
               <Route 

@@ -19,9 +19,15 @@ from auth_utils import (
     get_current_user,
     get_current_admin_user
 )
+from delivery_utils import calculate_delivery_charge, geocode_address
+from razorpay_utils import create_razorpay_order, verify_razorpay_signature, create_refund
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -30,6 +36,16 @@ db = client[os.environ['DB_NAME']]
 
 # Create the main app without a prefix
 app = FastAPI(title="Mithaas Delights API", version="1.0.0")
+
+# CORS Configuration
+cors_origins = os.environ.get('CORS_ORIGINS', '*').split(',')
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins if cors_origins[0] != '*' else ['*'],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
@@ -64,9 +80,12 @@ class PaymentStatus(str, Enum):
 
 # Product Variant Model
 class ProductVariant(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))  # Unique variant ID
     weight: str  # e.g., "250g", "500g", "1kg"
     price: float
     original_price: Optional[float] = None
+    sku: Optional[str] = None  # Stock keeping unit
+    stock: int = 100  # Available stock
     is_available: bool = True
 
 # Updated Product Model with Variants and Media
@@ -180,39 +199,6 @@ class CartItem(BaseModel):
     quantity: int
     price: float
 
-class Order(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    items: List[CartItem]
-    total_amount: float
-    discount_amount: float = 0
-    final_amount: float
-    coupon_code: Optional[str] = None
-    status: OrderStatus = OrderStatus.PENDING
-    payment_status: PaymentStatus = PaymentStatus.PENDING
-    payment_method: str = "cod"  # cod, razorpay
-    delivery_address: str
-    phone_number: str
-    email: str
-    razorpay_order_id: Optional[str] = None
-    razorpay_payment_id: Optional[str] = None
-    razorpay_signature: Optional[str] = None
-    whatsapp_link: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class OrderCreate(BaseModel):
-    user_id: str
-    items: List[CartItem]
-    total_amount: float
-    discount_amount: float = 0
-    final_amount: float
-    coupon_code: Optional[str] = None
-    delivery_address: str
-    phone_number: str
-    email: str
-    payment_method: str = "cod"
-
 # Razorpay Models
 class RazorpayOrderCreate(BaseModel):
     amount: float
@@ -269,7 +255,7 @@ class TokenResponse(BaseModel):
     token_type: str
     user: UserResponse
 
-# Review Model with Approval
+# Review Model with Photos and Approval
 class Review(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     product_id: str
@@ -277,7 +263,8 @@ class Review(BaseModel):
     user_name: str
     rating: int = Field(ge=1, le=5)
     comment: str
-    is_approved: bool = False  # New: Admin approval
+    images: List[str] = []  # Photo URLs
+    is_approved: bool = False  # Admin approval required
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ReviewCreate(BaseModel):
@@ -286,6 +273,125 @@ class ReviewCreate(BaseModel):
     user_name: str
     rating: int = Field(ge=1, le=5)
     comment: str
+    images: List[str] = []  # Photo URLs
+
+# Media Gallery Models
+class MediaItem(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    media_url: str
+    media_type: str  # "image" or "video"
+    thumbnail_url: Optional[str] = None
+    description: Optional[str] = None
+    display_order: int = 0
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class MediaItemCreate(BaseModel):
+    title: str
+    media_url: str
+    media_type: str
+    thumbnail_url: Optional[str] = None
+    description: Optional[str] = None
+    display_order: int = 0
+
+# Bulk Order Models
+class BulkOrderStatus(str, Enum):
+    PENDING = "pending"
+    UNDER_REVIEW = "under_review"
+    QUOTED = "quoted"
+    CONFIRMED = "confirmed"
+    REJECTED = "rejected"
+
+class BulkOrder(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    company_name: str
+    contact_person: str
+    email: EmailStr
+    phone: str
+    product_details: str  # Description of products needed
+    quantity: str  # e.g., "50 boxes", "100 kg"
+    preferred_date: Optional[datetime] = None
+    delivery_address: str
+    status: BulkOrderStatus = BulkOrderStatus.PENDING
+    admin_notes: Optional[str] = None
+    quoted_amount: Optional[float] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class BulkOrderCreate(BaseModel):
+    company_name: str
+    contact_person: str
+    email: EmailStr
+    phone: str
+    product_details: str
+    quantity: str
+    preferred_date: Optional[datetime] = None
+    delivery_address: str
+
+class BulkOrderUpdate(BaseModel):
+    status: Optional[BulkOrderStatus] = None
+    admin_notes: Optional[str] = None
+    quoted_amount: Optional[float] = None
+
+# Order Status History Model
+class OrderStatusHistory(BaseModel):
+    status: OrderStatus
+    timestamp: datetime
+    note: Optional[str] = None
+
+# Enhanced Order Model with Status History and Delivery Info
+class Order(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    items: List[CartItem]
+    total_amount: float
+    discount_amount: float = 0
+    delivery_charge: float = 0
+    tax_amount: float = 0
+    final_amount: float
+    coupon_code: Optional[str] = None
+    status: OrderStatus = OrderStatus.PENDING
+    status_history: List[OrderStatusHistory] = []
+    payment_status: PaymentStatus = PaymentStatus.PENDING
+    payment_method: str = "cod"
+    delivery_address: str
+    delivery_type: str = "delivery"  # "delivery" or "pickup"
+    delivery_distance_km: Optional[float] = None
+    customer_lat: Optional[float] = None
+    customer_lon: Optional[float] = None
+    phone_number: str
+    email: str
+    razorpay_order_id: Optional[str] = None
+    razorpay_payment_id: Optional[str] = None
+    razorpay_signature: Optional[str] = None
+    whatsapp_link: Optional[str] = None
+    advance_required: bool = False
+    advance_amount: Optional[float] = None
+    advance_paid: bool = False
+    cancelled_at: Optional[datetime] = None
+    refund_status: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class OrderCreate(BaseModel):
+    user_id: str
+    items: List[CartItem]
+    total_amount: float
+    discount_amount: float = 0
+    delivery_charge: float = 0
+    tax_amount: float = 0
+    final_amount: float
+    coupon_code: Optional[str] = None
+    delivery_address: str
+    delivery_type: str = "delivery"
+    customer_lat: Optional[float] = None
+    customer_lon: Optional[float] = None
+    phone_number: str
+    email: str
+    payment_method: str = "cod"
+    advance_required: bool = False
+    advance_amount: Optional[float] = None
 
 # Chatbot Models
 class ChatMessage(BaseModel):
@@ -457,13 +563,21 @@ async def delete_product(
     product_id: str,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Delete a product (Admin only)"""
+    """Delete a product (Admin only) - Also removes from all user carts"""
     await get_current_admin_user(credentials, db)
     
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
-    return {"message": "Product deleted successfully"}
+    
+    # STEP D: Remove product from all user carts
+    await db.carts.update_many(
+        {"items.product_id": product_id},
+        {"$pull": {"items": {"product_id": product_id}}}
+    )
+    
+    logger.info(f"Product {product_id} deleted and removed from all carts")
+    return {"message": "Product deleted successfully and removed from carts"}
 
 # ==================== CART ROUTES ====================
 
@@ -772,17 +886,40 @@ async def delete_banner(
 
 @api_router.post("/orders", response_model=Order)
 async def create_order(order: OrderCreate):
-    """Create a new order"""
+    """Create a new order with delivery calculation and status history"""
     order_dict = order.dict()
     order_obj = Order(**order_dict)
+    
+    # Initialize status history
+    initial_status = OrderStatus.CONFIRMED if order.payment_method == "cod" else OrderStatus.PENDING
+    order_obj.status = initial_status
+    order_obj.status_history = [
+        OrderStatusHistory(
+            status=initial_status,
+            timestamp=datetime.now(timezone.utc),
+            note="Order placed"
+        )
+    ]
+    
+    # Calculate delivery charge if coordinates provided
+    if order.customer_lat and order.customer_lon:
+        delivery_info = calculate_delivery_charge(
+            customer_lat=order.customer_lat,
+            customer_lon=order.customer_lon,
+            order_amount=order.total_amount,
+            delivery_type=order.delivery_type
+        )
+        order_obj.delivery_charge = delivery_info['delivery_charge']
+        order_obj.delivery_distance_km = delivery_info['distance_km']
+        # Recalculate final amount with delivery
+        order_obj.final_amount = order.total_amount - order.discount_amount + delivery_info['delivery_charge']
     
     # Generate WhatsApp link
     order_obj.whatsapp_link = generate_whatsapp_link(order_obj)
     
-    # If payment method is COD, mark as confirmed
+    # Set payment status
     if order.payment_method == "cod":
         order_obj.payment_status = PaymentStatus.PENDING
-        order_obj.status = OrderStatus.CONFIRMED
     
     await db.orders.insert_one(prepare_for_mongo(order_obj.dict()))
     
@@ -793,6 +930,16 @@ async def create_order(order: OrderCreate):
             {"$inc": {"used_count": 1}}
         )
     
+    # Clear user cart after order placement
+    try:
+        await db.carts.update_one(
+            {"user_id": order.user_id},
+            {"$set": {"items": [], "updated_at": datetime.now(timezone.utc).isoformat()}}
+        )
+    except Exception as e:
+        logger.warning(f"Could not clear cart for user {order.user_id}: {str(e)}")
+    
+    logger.info(f"Order created: {order_obj.id} for user {order.user_id}")
     return order_obj
 
 @api_router.get("/orders/{order_id}", response_model=Order)
@@ -841,28 +988,59 @@ async def update_order_status(
 # ==================== RAZORPAY ROUTES ====================
 
 @api_router.post("/razorpay/create-order")
-async def create_razorpay_order(order_data: RazorpayOrderCreate):
-    """Create Razorpay order"""
+async def create_razorpay_order_api(order_data: RazorpayOrderCreate):
+    """Create Razorpay order for payment"""
     try:
-        # Mock Razorpay order creation for test mode
-        razorpay_order_id = f"order_{uuid.uuid4().hex[:10]}"
+        # Create Razorpay order using utility function
+        razorpay_order = create_razorpay_order(
+            amount=order_data.amount,
+            receipt=f"order_{int(order_data.amount)}"
+        )
         
         return {
+            "razorpay_order_id": razorpay_order['id'],
+            "amount": razorpay_order['amount'],
+            "currency": razorpay_order['currency'],
+            "key_id": os.environ.get('RAZORPAY_KEY_ID')
+        }
+    except Exception as e:
+        logger.error(f"Razorpay order creation failed: {str(e)}")
+        # Fallback to mock for test mode
+        razorpay_order_id = f"order_test_{uuid.uuid4().hex[:10]}"
+        return {
             "razorpay_order_id": razorpay_order_id,
-            "amount": int(order_data.amount * 100),  # Convert to paise
+            "amount": int(order_data.amount * 100),
             "currency": "INR",
             "key_id": os.environ.get('RAZORPAY_KEY_ID', 'rzp_test_1234567890')
         }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to create Razorpay order: {str(e)}")
 
 @api_router.post("/razorpay/verify-payment")
-async def verify_razorpay_payment(payment_data: RazorpayPaymentVerify):
-    """Verify Razorpay payment"""
+async def verify_razorpay_payment_api(payment_data: RazorpayPaymentVerify):
+    """Verify Razorpay payment signature"""
     try:
-        # In production, verify signature with Razorpay secret
-        # For test mode, we'll just update the order
+        # Verify signature
+        is_valid = verify_razorpay_signature(
+            razorpay_order_id=payment_data.razorpay_order_id,
+            razorpay_payment_id=payment_data.razorpay_payment_id,
+            razorpay_signature=payment_data.razorpay_signature
+        )
         
+        if not is_valid:
+            raise HTTPException(status_code=400, detail="Invalid payment signature")
+        
+        # Get order and update status history
+        order = await db.orders.find_one({"id": payment_data.order_id})
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        status_history = order.get("status_history", [])
+        status_history.append({
+            "status": OrderStatus.CONFIRMED.value,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "note": "Payment completed via Razorpay"
+        })
+        
+        # Update order with payment details
         result = await db.orders.update_one(
             {"id": payment_data.order_id},
             {"$set": {
@@ -871,15 +1049,17 @@ async def verify_razorpay_payment(payment_data: RazorpayPaymentVerify):
                 "razorpay_signature": payment_data.razorpay_signature,
                 "payment_status": PaymentStatus.COMPLETED.value,
                 "status": OrderStatus.CONFIRMED.value,
+                "status_history": status_history,
                 "updated_at": datetime.now(timezone.utc).isoformat()
             }}
         )
         
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Order not found")
-        
+        logger.info(f"Payment verified for order {payment_data.order_id}")
         return {"success": True, "message": "Payment verified successfully"}
+    except HTTPException:
+        raise
     except Exception as e:
+        logger.error(f"Payment verification failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Payment verification failed: {str(e)}")
 
 # ==================== AUTH ROUTES ====================
@@ -1553,7 +1733,7 @@ async def cancel_order(
     order_id: str,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Cancel order (within 1 hour for users, anytime for admin)"""
+    """Cancel order (within 1 hour for users, anytime for admin) with refund support"""
     current_user = await get_current_user(credentials, db)
     
     # Get order
@@ -1583,25 +1763,50 @@ async def cancel_order(
                 detail="Order can only be cancelled within 1 hour of placement. Please contact admin for assistance."
             )
     
+    # Add cancellation to status history
+    status_history = order.get("status_history", [])
+    status_history.append({
+        "status": OrderStatus.CANCELLED.value,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "note": "Order cancelled by " + ("admin" if is_admin else "customer")
+    })
+    
     # Update order status
     update_data = {
         "status": OrderStatus.CANCELLED.value,
+        "cancelled_at": datetime.now(timezone.utc).isoformat(),
+        "status_history": status_history,
         "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
-    # If payment was completed, mark for refund
+    refund_initiated = False
+    # If payment was completed, initiate refund
     if order.get("payment_status") == PaymentStatus.COMPLETED.value:
-        update_data["payment_status"] = PaymentStatus.REFUNDED.value
+        try:
+            # Attempt to create refund via Razorpay
+            if order.get("razorpay_payment_id"):
+                refund = create_refund(order["razorpay_payment_id"])
+                update_data["refund_status"] = "initiated"
+                update_data["payment_status"] = PaymentStatus.REFUNDED.value
+                refund_initiated = True
+                logger.info(f"Refund initiated for order {order_id}: {refund['id']}")
+        except Exception as e:
+            logger.error(f"Refund failed for order {order_id}: {str(e)}")
+            update_data["refund_status"] = "pending_manual"
+            update_data["payment_status"] = PaymentStatus.REFUNDED.value  # Mark as refunded for tracking
     
     await db.orders.update_one(
         {"id": order_id},
         {"$set": update_data}
     )
     
+    logger.info(f"Order {order_id} cancelled by {current_user['email']}")
+    
     return {
         "success": True,
-        "message": "Order cancelled successfully" + (" and refund initiated" if order.get("payment_status") == PaymentStatus.COMPLETED.value else ""),
-        "can_reorder": True
+        "message": "Order cancelled successfully" + (" and refund initiated" if refund_initiated else ""),
+        "can_reorder": True,
+        "refund_status": update_data.get("refund_status")
     }
 
 @api_router.post("/chat")
@@ -1844,6 +2049,188 @@ async def init_sample_data():
         await db.products.insert_one(prepare_for_mongo(product_obj.dict()))
     
     return {"message": "Sample data initialized successfully", "products_added": len(sample_products)}
+
+
+# ==================== DELIVERY CALCULATION ROUTES ====================
+
+@api_router.post("/delivery/calculate")
+async def calculate_delivery(
+    pincode: Optional[str] = None,
+    latitude: Optional[float] = None,
+    longitude: Optional[float] = None,
+    order_amount: float = 0,
+    delivery_type: str = "delivery"
+):
+    """
+    Calculate delivery charges based on location and order amount
+    Requires either pincode OR lat/lon coordinates
+    """
+    try:
+        # Get coordinates from pincode if not provided
+        if not latitude or not longitude:
+            if pincode:
+                latitude, longitude = await geocode_address(pincode=pincode)
+            else:
+                raise HTTPException(
+                    status_code=400,
+                    detail="Please provide either pincode or latitude/longitude"
+                )
+        
+        # Calculate delivery charges
+        delivery_info = calculate_delivery_charge(
+            customer_lat=latitude,
+            customer_lon=longitude,
+            order_amount=order_amount,
+            delivery_type=delivery_type
+        )
+        
+        return delivery_info
+    except Exception as e:
+        logger.error(f"Delivery calculation error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== BULK ORDER ROUTES ====================
+
+@api_router.post("/bulk-orders", response_model=BulkOrder)
+async def create_bulk_order(bulk_order: BulkOrderCreate):
+    """Create a bulk order request"""
+    bulk_order_obj = BulkOrder(**bulk_order.dict())
+    await db.bulk_orders.insert_one(prepare_for_mongo(bulk_order_obj.dict()))
+    
+    logger.info(f"Bulk order created: {bulk_order_obj.id} from {bulk_order_obj.company_name}")
+    return bulk_order_obj
+
+@api_router.get("/bulk-orders", response_model=List[BulkOrder])
+async def get_bulk_orders(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get all bulk orders (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    bulk_orders = await db.bulk_orders.find().sort("created_at", -1).to_list(length=None)
+    return [BulkOrder(**parse_from_mongo(order)) for order in bulk_orders]
+
+@api_router.get("/bulk-orders/{order_id}", response_model=BulkOrder)
+async def get_bulk_order(order_id: str):
+    """Get bulk order by ID"""
+    bulk_order = await db.bulk_orders.find_one({"id": order_id})
+    if not bulk_order:
+        raise HTTPException(status_code=404, detail="Bulk order not found")
+    return BulkOrder(**parse_from_mongo(bulk_order))
+
+@api_router.put("/bulk-orders/{order_id}", response_model=BulkOrder)
+async def update_bulk_order(
+    order_id: str,
+    update_data: BulkOrderUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update bulk order status/quote (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
+    update_dict["updated_at"] = datetime.now(timezone.utc)
+    
+    result = await db.bulk_orders.update_one(
+        {"id": order_id},
+        {"$set": prepare_for_mongo(update_dict)}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Bulk order not found")
+    
+    updated_order = await db.bulk_orders.find_one({"id": order_id})
+    return BulkOrder(**parse_from_mongo(updated_order))
+
+# ==================== MEDIA GALLERY ROUTES ====================
+
+@api_router.post("/media", response_model=MediaItem)
+async def create_media(
+    media: MediaItemCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create media gallery item (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    media_obj = MediaItem(**media.dict())
+    await db.media_gallery.insert_one(prepare_for_mongo(media_obj.dict()))
+    return media_obj
+
+@api_router.get("/media", response_model=List[MediaItem])
+async def get_media_gallery(active_only: bool = True):
+    """Get media gallery items"""
+    filter_query = {"is_active": True} if active_only else {}
+    media_items = await db.media_gallery.find(filter_query).sort("display_order", 1).to_list(length=None)
+    return [MediaItem(**parse_from_mongo(item)) for item in media_items]
+
+@api_router.delete("/media/{media_id}")
+async def delete_media(
+    media_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete media item (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    result = await db.media_gallery.delete_one({"id": media_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    return {"message": "Media item deleted successfully"}
+
+# ==================== ORDER TRACKING ROUTES ====================
+
+@api_router.get("/orders/track/{order_id}")
+async def track_order(order_id: str):
+    """Track order status - Public endpoint"""
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order_obj = Order(**parse_from_mongo(order))
+    
+    # Return tracking information
+    return {
+        "order_id": order_obj.id,
+        "status": order_obj.status,
+        "status_history": order_obj.status_history,
+        "payment_status": order_obj.payment_status,
+        "created_at": order_obj.created_at,
+        "updated_at": order_obj.updated_at,
+        "estimated_delivery": None  # Can be calculated based on status
+    }
+
+@api_router.put("/orders/{order_id}/update-status")
+async def update_order_status_with_history(
+    order_id: str,
+    status: OrderStatus,
+    note: Optional[str] = None,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update order status with history tracking (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Get current order
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Add to status history
+    status_history = order.get("status_history", [])
+    status_history.append({
+        "status": status.value,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "note": note
+    })
+    
+    # Update order
+    result = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": status.value,
+            "status_history": status_history,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    logger.info(f"Order {order_id} status updated to {status.value}")
+    return {"message": "Order status updated successfully", "new_status": status.value}
+
 
 # Include the router in the main app
 app.include_router(api_router)
