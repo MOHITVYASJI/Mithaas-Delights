@@ -139,11 +139,6 @@ class UserLogin(BaseModel):
     email: EmailStr
     password: str
 
-class UserLoginWithPhone(BaseModel):
-    phone: str
-    password: str
-
-
 class UserResponse(BaseModel):
     id: str
     name: str
@@ -433,57 +428,6 @@ async def login(credentials: UserLogin):
         token_type="bearer",
         user=user_response
     )
-
-@api_router.post("/auth/login/phone", response_model=TokenResponse)
-async def login_with_phone(credentials: UserLoginWithPhone):
-    """Login user with phone number and return JWT token"""
-    # Find user by phone number
-    user = await db.users.find_one({"phone": credentials.phone})
-    if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect phone number or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Verify password
-    if not verify_password(credentials.password, user["hashed_password"]):
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect phone number or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    
-    # Check if user is active
-    if not user.get("is_active", True):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="Account is inactive"
-        )
-    
-    # Create access token
-    access_token = create_access_token(
-        data={"sub": user["id"], "email": user["email"], "role": user["role"]}
-    )
-    
-    # Return token and user info
-    user_response = UserResponse(
-        id=user["id"],
-        name=user["name"],
-        email=user["email"],
-        phone=user.get("phone"),
-        role=UserRole(user["role"]),
-        addresses=user.get("addresses", []),
-        wishlist=user.get("wishlist", []),
-        created_at=datetime.fromisoformat(user["created_at"]) if isinstance(user["created_at"], str) else user["created_at"]
-    )
-    
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user=user_response
-    )
-
 
 @api_router.get("/auth/me", response_model=UserResponse)
 async def get_current_user_info(credentials: HTTPAuthorizationCredentials = Security(security)):
