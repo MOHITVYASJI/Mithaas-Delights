@@ -175,6 +175,7 @@ class BannerCreate(BaseModel):
 # Updated Order Model with Payment Info
 class CartItem(BaseModel):
     product_id: str
+    product_name: Optional[str] = None  # Added for display purposes
     variant_weight: str
     quantity: int
     price: float
@@ -332,10 +333,11 @@ def generate_whatsapp_link(order: Order) -> str:
     """Generate WhatsApp link for order confirmation with full details"""
     whatsapp_number = os.environ.get('WHATSAPP_NUMBER', '+918989549544')
     
-    # Build detailed message with item breakdown
+    # Build detailed message with item breakdown including product names
     items_text = ""
     for item in order.items:
-        items_text += f"\n- {item.variant_weight} x {item.quantity} = ₹{item.price * item.quantity}"
+        product_display = item.product_name if item.product_name else f"Product {item.product_id[:8]}"
+        items_text += f"\n- {product_display} ({item.variant_weight}) x{item.quantity} = ₹{item.price * item.quantity}"
     
     message = (
         f"Hello! I have placed an order.\n\n"
@@ -1134,6 +1136,78 @@ async def unblock_user(
     
     return {"message": "User unblocked successfully"}
 
+class UserUpdateAdmin(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    role: Optional[UserRole] = None
+    addresses: Optional[List[str]] = None
+
+@api_router.put("/users/{user_id}")
+async def update_user(
+    user_id: str,
+    user_update: UserUpdateAdmin,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update user details (Admin only)"""
+    admin_user = await get_current_admin_user(credentials, db)
+    
+    # Get current user
+    user = await db.users.find_one({"id": user_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Build update dict
+    update_dict = {}
+    if user_update.name is not None:
+        update_dict["name"] = user_update.name
+    if user_update.phone is not None:
+        update_dict["phone"] = user_update.phone
+    if user_update.role is not None:
+        # Prevent admin from demoting themselves
+        if admin_user["id"] == user_id and user_update.role != UserRole.ADMIN:
+            raise HTTPException(status_code=400, detail="Cannot change your own role")
+        update_dict["role"] = user_update.role.value
+    if user_update.addresses is not None:
+        update_dict["addresses"] = user_update.addresses
+    
+    if update_dict:
+        update_dict["updated_at"] = datetime.now(timezone.utc).isoformat()
+        await db.users.update_one(
+            {"id": user_id},
+            {"$set": update_dict}
+        )
+    
+    updated_user = await db.users.find_one({"id": user_id})
+    return UserResponse(
+        id=updated_user["id"],
+        name=updated_user["name"],
+        email=updated_user["email"],
+        phone=updated_user.get("phone"),
+        role=UserRole(updated_user["role"]),
+        addresses=updated_user.get("addresses", []),
+        wishlist=updated_user.get("wishlist", []),
+        is_active=updated_user.get("is_active", True),
+        created_at=datetime.fromisoformat(updated_user["created_at"]) if isinstance(updated_user["created_at"], str) else updated_user["created_at"]
+    )
+
+@api_router.delete("/users/{user_id}")
+async def delete_user(
+    user_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete a user (Admin only)"""
+    admin_user = await get_current_admin_user(credentials, db)
+    
+    # Prevent admin from deleting themselves
+    if admin_user["id"] == user_id:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    return {"message": "User deleted successfully"}
+
 # ==================== WISHLIST ROUTES ====================
 
 @api_router.post("/wishlist/add/{product_id}")
@@ -1263,6 +1337,174 @@ async def delete_review(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Review not found")
     return {"message": "Review deleted successfully"}
+
+class ReviewUpdate(BaseModel):
+    rating: Optional[int] = Field(None, ge=1, le=5)
+    comment: Optional[str] = None
+    is_approved: Optional[bool] = None
+
+@api_router.put("/reviews/{review_id}")
+async def update_review(
+    review_id: str,
+    review_update: ReviewUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update a review (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Get current review
+    review = await db.reviews.find_one({"id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    # Build update dict
+    update_dict = {}
+    if review_update.rating is not None:
+        update_dict["rating"] = review_update.rating
+    if review_update.comment is not None:
+        update_dict["comment"] = review_update.comment
+    if review_update.is_approved is not None:
+        update_dict["is_approved"] = review_update.is_approved
+    
+    if update_dict:
+        await db.reviews.update_one(
+            {"id": review_id},
+            {"$set": update_dict}
+        )
+        
+        # Recalculate product rating if rating changed
+        if "rating" in update_dict or "is_approved" in update_dict:
+            product = await db.products.find_one({"id": review["product_id"]})
+            if product:
+                reviews = await db.reviews.find({"product_id": review["product_id"], "is_approved": True}).to_list(length=None)
+                if reviews:
+                    avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
+                    await db.products.update_one(
+                        {"id": review["product_id"]},
+                        {"$set": {"rating": round(avg_rating, 1), "review_count": len(reviews)}}
+                    )
+    
+    updated_review = await db.reviews.find_one({"id": review_id})
+    return Review(**parse_from_mongo(updated_review))
+
+# ==================== THEME/SETTINGS MANAGEMENT ====================
+
+class ThemeSettings(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    theme_name: str
+    primary_color: str = "#f97316"  # orange-500
+    secondary_color: str = "#f59e0b"  # amber-500
+    accent_color: str = "#ea580c"  # orange-600
+    festival_mode: bool = False
+    festival_theme: Optional[str] = None  # "diwali", "holi", "christmas" etc.
+    hero_image_url: Optional[str] = None
+    logo_url: Optional[str] = None
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ThemeSettingsCreate(BaseModel):
+    theme_name: str
+    primary_color: str = "#f97316"
+    secondary_color: str = "#f59e0b"
+    accent_color: str = "#ea580c"
+    festival_mode: bool = False
+    festival_theme: Optional[str] = None
+    hero_image_url: Optional[str] = None
+    logo_url: Optional[str] = None
+
+@api_router.get("/settings/theme")
+async def get_active_theme():
+    """Get active theme settings"""
+    theme = await db.theme_settings.find_one({"is_active": True})
+    if not theme:
+        # Return default theme
+        default_theme = ThemeSettings(
+            theme_name="Default",
+            primary_color="#f97316",
+            secondary_color="#f59e0b",
+            accent_color="#ea580c"
+        )
+        return default_theme
+    return ThemeSettings(**parse_from_mongo(theme))
+
+@api_router.get("/settings/themes")
+async def get_all_themes(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get all theme settings (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    themes = await db.theme_settings.find().to_list(length=None)
+    return [ThemeSettings(**parse_from_mongo(theme)) for theme in themes]
+
+@api_router.post("/settings/theme", response_model=ThemeSettings)
+async def create_theme(
+    theme: ThemeSettingsCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create a new theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    theme_obj = ThemeSettings(**theme.dict())
+    await db.theme_settings.insert_one(prepare_for_mongo(theme_obj.dict()))
+    return theme_obj
+
+@api_router.put("/settings/theme/{theme_id}")
+async def update_theme(
+    theme_id: str,
+    theme_update: ThemeSettingsCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    theme_dict = theme_update.dict()
+    theme_dict["updated_at"] = datetime.now(timezone.utc)
+    
+    result = await db.theme_settings.update_one(
+        {"id": theme_id},
+        {"$set": prepare_for_mongo(theme_dict)}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    
+    updated_theme = await db.theme_settings.find_one({"id": theme_id})
+    return ThemeSettings(**parse_from_mongo(updated_theme))
+
+@api_router.put("/settings/theme/{theme_id}/activate")
+async def activate_theme(
+    theme_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Activate a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Deactivate all themes
+    await db.theme_settings.update_many({}, {"$set": {"is_active": False}})
+    
+    # Activate selected theme
+    result = await db.theme_settings.update_one(
+        {"id": theme_id},
+        {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    
+    return {"message": "Theme activated successfully"}
+
+@api_router.delete("/settings/theme/{theme_id}")
+async def delete_theme(
+    theme_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    result = await db.theme_settings.delete_one({"id": theme_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    return {"message": "Theme deleted successfully"}
 
 # ==================== CHATBOT ROUTES ====================
 

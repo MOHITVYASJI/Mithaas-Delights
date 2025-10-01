@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard, User, MapPin, Phone } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, CreditCard, User, MapPin, Phone, X } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -16,11 +16,12 @@ const API = `${BACKEND_URL}/api`;
 // Cart Dialog Component
 export const CartDialog = ({ children }) => {
   const { cartItems, cartCount, updateQuantity, removeFromCart, getTotalPrice, clearCart } = useCart();
+  const [isOpen, setIsOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
   if (cartCount === 0) {
     return (
-      <Dialog>
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogTrigger asChild>
           {children}
         </DialogTrigger>
@@ -32,7 +33,11 @@ export const CartDialog = ({ children }) => {
             <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-gray-600 mb-2">Your cart is empty</h3>
             <p className="text-gray-500 mb-4">Add some delicious items to get started!</p>
-            <Button className="bg-orange-500 hover:bg-orange-600">
+            <Button 
+              className="bg-orange-500 hover:bg-orange-600"
+              onClick={() => setIsOpen(false)}
+              data-testid="continue-shopping-empty"
+            >
               Continue Shopping
             </Button>
           </div>
@@ -42,7 +47,7 @@ export const CartDialog = ({ children }) => {
   }
 
   return (
-    <Dialog>
+    <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         {children}
       </DialogTrigger>
@@ -65,7 +70,7 @@ export const CartDialog = ({ children }) => {
         <div className="space-y-4">
           {cartItems.map((item) => (
             <CartItem 
-              key={item.id} 
+              key={`${item.id}-${item.weight}`} 
               item={item} 
               updateQuantity={updateQuantity} 
               removeFromCart={removeFromCart} 
@@ -78,11 +83,16 @@ export const CartDialog = ({ children }) => {
         <div className="space-y-3">
           <div className="flex justify-between text-lg font-semibold">
             <span>Total:</span>
-            <span className="text-orange-600">₹{getTotalPrice().toFixed(2)}</span>
+            <span className="text-orange-600" data-testid="cart-total">₹{getTotalPrice().toFixed(2)}</span>
           </div>
           
           <div className="grid grid-cols-2 gap-3">
-            <Button variant="outline" className="w-full">
+            <Button 
+              variant="outline" 
+              className="w-full"
+              onClick={() => setIsOpen(false)}
+              data-testid="continue-shopping-button"
+            >
               Continue Shopping
             </Button>
             <Dialog open={isCheckoutOpen} onOpenChange={setIsCheckoutOpen}>
@@ -98,6 +108,7 @@ export const CartDialog = ({ children }) => {
                   totalAmount={getTotalPrice()} 
                   onSuccess={() => {
                     setIsCheckoutOpen(false);
+                    setIsOpen(false);
                     clearCart();
                   }} 
                 />
@@ -208,13 +219,17 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
         user_id: formData.email, // Using email as user identifier for now
         items: cartItems.map(item => ({
           product_id: item.id,
+          product_name: item.name, // Include product name for WhatsApp
+          variant_weight: item.weight,
           quantity: item.quantity,
           price: item.price
         })),
         total_amount: totalAmount,
+        final_amount: totalAmount,
         delivery_address: `${formData.address}, ${formData.city}, ${formData.state} - ${formData.pincode}`,
         phone_number: formData.phone,
-        email: formData.email
+        email: formData.email,
+        payment_method: formData.paymentMethod
       };
 
       const response = await axios.post(`${API}/orders`, orderData);
@@ -224,7 +239,14 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
         initializeRazorpayPayment(response.data, formData);
       } else {
         // Cash on Delivery
-        toast.success(`Order placed successfully! Order ID: ${response.data.id}`);
+        toast.success(`Order placed successfully! Order ID: ${response.data.id.slice(0, 8)}`);
+        
+        // Open WhatsApp link if available
+        if (response.data.whatsapp_link) {
+          window.open(response.data.whatsapp_link, '_blank');
+          toast.info('Opening WhatsApp to confirm your order...');
+        }
+        
         onSuccess();
       }
     } catch (error) {
@@ -237,7 +259,7 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
 
   const initializeRazorpayPayment = (order, customerData) => {
     // Mock Razorpay integration for demo purposes
-    toast.success(`Order placed successfully! Order ID: ${order.id}`);
+    toast.success(`Order placed successfully! Order ID: ${order.id.slice(0, 8)}`);
     toast.info('Payment integration will be completed with actual Razorpay keys');
     onSuccess();
   };
@@ -481,12 +503,19 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
               <CardTitle>Order Summary</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {cartItems.map((item) => (
-                <div key={item.id} className="flex justify-between text-sm">
-                  <span>{item.name} × {item.quantity}</span>
-                  <span>₹{(item.price * item.quantity).toFixed(2)}</span>
-                </div>
-              ))}
+              <div className="space-y-3 max-h-64 overflow-y-auto">
+                {cartItems.map((item) => (
+                  <div key={`${item.id}-${item.weight}`} className="flex justify-between text-sm border-b pb-2">
+                    <div className="flex-1">
+                      <span className="font-medium">{item.name}</span>
+                      <div className="text-gray-600">
+                        {item.weight} × {item.quantity}
+                      </div>
+                    </div>
+                    <span className="font-medium">₹{(item.price * item.quantity).toFixed(2)}</span>
+                  </div>
+                ))}
+              </div>
               
               <Separator />
               
@@ -499,6 +528,7 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
                   <span>Delivery Fee</span>
                   <span className="text-green-600">Free</span>
                 </div>
+                <Separator />
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total</span>
                   <span className="text-orange-600" data-testid="order-total">₹{totalAmount.toFixed(2)}</span>

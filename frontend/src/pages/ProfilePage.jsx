@@ -88,6 +88,38 @@ const ProfilePage = () => {
     }
   };
 
+  const canCancelOrder = (order) => {
+    // Check if order can be cancelled (within 1 hour and status allows)
+    if (order.status === 'cancelled' || order.status === 'delivered') {
+      return false;
+    }
+    
+    const orderTime = new Date(order.created_at).getTime();
+    const currentTime = new Date().getTime();
+    const oneHourInMs = 60 * 60 * 1000;
+    
+    return (currentTime - orderTime) < oneHourInMs;
+  };
+
+  const handleCancelOrder = async (orderId) => {
+    if (!window.confirm('Are you sure you want to cancel this order? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await axios.put(`${API}/orders/${orderId}/status?status=cancelled`, {}, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      });
+      toast.success('Order cancelled successfully');
+      fetchOrders(); // Refresh orders list
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      toast.error(error.response?.data?.detail || 'Failed to cancel order. Please contact support.');
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'delivered': return 'bg-green-100 text-green-700';
@@ -343,11 +375,13 @@ const ProfilePage = () => {
                               </div>
                             </div>
 
-                            <div className="flex space-x-3 mt-4">
+                            <div className="flex justify-between items-center mt-4">
+                              <div className="flex space-x-3">
                               <Button 
                                 variant="outline" 
                                 size="sm"
                                 onClick={() => window.location.href = `/track-order?id=${order.id}`}
+                                data-testid="track-order-button"
                               >
                                 Track Order
                               </Button>
@@ -356,8 +390,23 @@ const ProfilePage = () => {
                                   variant="outline" 
                                   size="sm"
                                   className="text-orange-600 hover:text-orange-700"
+                                  data-testid="reorder-button"
                                 >
                                   Reorder
+                                </Button>
+                              )}
+                              </div>
+                              
+                              {/* Cancel button - only shown within 1 hour of order and if not cancelled/delivered */}
+                              {canCancelOrder(order) && (
+                                <Button 
+                                  variant="outline" 
+                                  size="sm"
+                                  className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                                  onClick={() => handleCancelOrder(order.id)}
+                                  data-testid="cancel-order-button"
+                                >
+                                  Cancel Order
                                 </Button>
                               )}
                             </div>
