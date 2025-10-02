@@ -11,7 +11,10 @@ from typing import List, Optional
 import uuid
 from datetime import datetime, timezone, timedelta
 from enum import Enum
-import google.generativeai as genai
+try:
+    import google.generativeai as genai
+except ImportError:
+    genai = None
 from auth_utils import (
     get_password_hash,
     verify_password,
@@ -1812,10 +1815,20 @@ async def cancel_order(
 @api_router.post("/chat")
 async def chat_with_bot(chat_request: ChatRequest):
     try:
+        # Check if genai is available
+        if genai is None:
+            return {
+                "response": "I'm sorry, but the AI chat feature is currently unavailable. Please contact our support team for assistance.",
+                "session_id": chat_request.session_id
+            }
+        
         # Get Gemini API key from environment
         gemini_api_key = os.environ.get('GEMINI_API_KEY')
         if not gemini_api_key:
-            raise HTTPException(status_code=500, detail="Gemini API key not configured")
+            return {
+                "response": "I'm sorry, but the AI chat feature is currently unavailable. Please contact our support team for assistance.",
+                "session_id": chat_request.session_id
+            }
         
         # Configure Gemini
         genai.configure(api_key=gemini_api_key)
@@ -2231,6 +2244,337 @@ async def update_order_status_with_history(
     logger.info(f"Order {order_id} status updated to {status.value}")
     return {"message": "Order status updated successfully", "new_status": status.value}
 
+@api_router.get("/orders/admin/update-stock/{order_id}")
+async def update_order_stock_status(
+    order_id: str,
+    status: OrderStatus,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update order stock status after delivery (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    result = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"status": status.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    logger.info(f"Order {order_id} status updated to {status.value}")
+    return {"message": "Order status updated successfully", "new_status": status.value}
+
+# ==================== NOTIFICATION SYSTEM ====================
+
+class NotificationType(str, Enum):
+    OFFER = "offer"
+    FESTIVAL = "festival"
+    ORDER_UPDATE = "order_update"
+    NEW_PRODUCT = "new_product"
+    GENERAL = "general"
+
+class Notification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    message: str
+    type: NotificationType = NotificationType.GENERAL
+    target_users: List[str] = []  # Empty means all users
+    is_broadcast: bool = False
+    link: Optional[str] = None
+    image_url: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    expires_at: Optional[datetime] = None
+    is_active: bool = True
+
+class NotificationCreate(BaseModel):
+    title: str
+    message: str
+    type: NotificationType = NotificationType.GENERAL
+    is_broadcast: bool = False
+    target_users: List[str] = []
+    link: Optional[str] = None
+    image_url: Optional[str] = None
+    expires_at: Optional[datetime] = None
+
+class UserNotification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    notification_id: str
+    is_read: bool = False
+    read_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+@api_router.post("/notifications")
+async def create_notification(
+    notification: NotificationCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create and send notification (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    notif_obj = Notification(**notification.dict())
+    await db.notifications.insert_one(prepare_for_mongo(notif_obj.dict()))
+    
+    # Create user notifications
+    if notification.is_broadcast or not notification.target_users:
+        # Send to all active users
+        users = await db.users.find({"is_active": True}).to_list(length=None)
+        for user in users:
+            user_notif = UserNotification(
+                user_id=user["id"],
+                notification_id=notif_obj.id
+            )
+            await db.user_notifications.insert_one(prepare_for_mongo(user_notif.dict()))
+    else:
+        # Send to specific users
+        for user_id in notification.target_users:
+            user_notif = UserNotification(
+                user_id=user_id,
+                notification_id=notif_obj.id
+            )
+            await db.user_notifications.insert_one(prepare_for_mongo(user_notif.dict()))
+    
+    logger.info(f"Notification created and sent: {notif_obj.title}")
+    return {"message": "Notification sent successfully", "notification_id": notif_obj.id}
+
+@api_router.get("/notifications/my")
+async def get_my_notifications(
+    credentials: HTTPAuthorizationCredentials = Security(security),
+    unread_only: bool = False
+):
+    """Get current user's notifications"""
+    current_user = await get_current_user(credentials, db)
+    
+    filter_query = {"user_id": current_user["id"]}
+    if unread_only:
+        filter_query["is_read"] = False
+    
+    user_notifs = await db.user_notifications.find(filter_query).sort("created_at", -1).to_list(length=50)
+    
+    # Fetch full notification details
+    result = []
+    for user_notif in user_notifs:
+        notif = await db.notifications.find_one({"id": user_notif["notification_id"]})
+        if notif and notif.get("is_active", True):
+            result.append({
+                **parse_from_mongo(notif),
+                "is_read": user_notif["is_read"],
+                "user_notification_id": user_notif["id"]
+            })
+    
+    return result
+
+@api_router.put("/notifications/{user_notif_id}/read")
+async def mark_notification_read(
+    user_notif_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Mark notification as read"""
+    current_user = await get_current_user(credentials, db)
+    
+    result = await db.user_notifications.update_one(
+        {"id": user_notif_id, "user_id": current_user["id"]},
+        {"$set": {"is_read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    return {"message": "Notification marked as read"}
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_count(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get count of unread notifications"""
+    current_user = await get_current_user(credentials, db)
+    
+    count = await db.user_notifications.count_documents({
+        "user_id": current_user["id"],
+        "is_read": False
+    })
+    
+    return {"unread_count": count}
+
+@api_router.get("/notifications/admin/all")
+async def get_all_notifications_admin(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get all notifications (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    notifications = await db.notifications.find().sort("created_at", -1).to_list(length=None)
+    return [Notification(**parse_from_mongo(notif)) for notif in notifications]
+
+@api_router.delete("/notifications/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete notification (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    result = await db.notifications.delete_one({"id": notification_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    # Also delete user notifications
+    await db.user_notifications.delete_many({"notification_id": notification_id})
+    
+    return {"message": "Notification deleted successfully"}
+
+# ==================== ADVERTISEMENT SYSTEM ====================
+
+class Advertisement(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    title: str
+    description: Optional[str] = None
+    image_url: str
+    video_url: Optional[str] = None
+    cta_text: str = "Learn More"
+    cta_link: Optional[str] = None
+    position: str = "banner"  # banner, sidebar, popup, inline
+    display_type: str = "rotating"  # static, rotating, carousel
+    display_order: int = 0
+    is_active: bool = True
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class AdvertisementCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    image_url: str
+    video_url: Optional[str] = None
+    cta_text: str = "Learn More"
+    cta_link: Optional[str] = None
+    position: str = "banner"
+    display_type: str = "rotating"
+    display_order: int = 0
+    is_active: bool = True
+    start_date: Optional[datetime] = None
+    end_date: Optional[datetime] = None
+
+@api_router.post("/advertisements")
+async def create_advertisement(
+    ad: AdvertisementCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create advertisement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    ad_obj = Advertisement(**ad.dict())
+    await db.advertisements.insert_one(prepare_for_mongo(ad_obj.dict()))
+    return ad_obj
+
+@api_router.get("/advertisements")
+async def get_advertisements(active_only: bool = True, position: Optional[str] = None):
+    """Get advertisements"""
+    filter_query = {}
+    if active_only:
+        filter_query["is_active"] = True
+        now = datetime.now(timezone.utc).isoformat()
+        filter_query["$or"] = [
+            {"start_date": None},
+            {"start_date": {"$lte": now}}
+        ]
+    
+    if position:
+        filter_query["position"] = position
+    
+    ads = await db.advertisements.find(filter_query).sort("display_order", 1).to_list(length=None)
+    return [Advertisement(**parse_from_mongo(ad)) for ad in ads]
+
+@api_router.put("/advertisements/{ad_id}")
+async def update_advertisement(
+    ad_id: str,
+    ad_update: AdvertisementCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update advertisement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    ad_dict = ad_update.dict()
+    ad_dict["updated_at"] = datetime.now(timezone.utc)
+    
+    result = await db.advertisements.update_one(
+        {"id": ad_id},
+        {"$set": prepare_for_mongo(ad_dict)}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+    
+    updated_ad = await db.advertisements.find_one({"id": ad_id})
+    return Advertisement(**parse_from_mongo(updated_ad))
+
+@api_router.delete("/advertisements/{ad_id}")
+async def delete_advertisement(
+    ad_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete advertisement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    result = await db.advertisements.delete_one({"id": ad_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Advertisement not found")
+    return {"message": "Advertisement deleted successfully"}
+
+# ==================== CART SYNC ENDPOINT ====================
+
+class CartSyncRequest(BaseModel):
+    local_cart_items: List[CartItemModel]
+
+@api_router.post("/cart/sync")
+async def sync_cart(
+    sync_request: CartSyncRequest,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Sync local storage cart with database cart on login"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Get existing cart
+    cart = await db.carts.find_one({"user_id": current_user["id"]})
+    
+    if not cart:
+        # Create new cart with local items
+        new_cart = Cart(user_id=current_user["id"], items=sync_request.local_cart_items)
+        await db.carts.insert_one(prepare_for_mongo(new_cart.dict()))
+        return {"message": "Cart synced successfully", "items": sync_request.local_cart_items}
+    
+    # Merge carts - combine by product_id + variant_weight
+    existing_items = cart.get("items", [])
+    merged_items = {f"{item['product_id']}-{item['variant_weight']}": item for item in existing_items}
+    
+    for local_item in sync_request.local_cart_items:
+        key = f"{local_item.product_id}-{local_item.variant_weight}"
+        if key in merged_items:
+            # Increase quantity
+            merged_items[key]["quantity"] += local_item.quantity
+        else:
+            # Add new item
+            merged_items[key] = local_item.dict()
+    
+    # Remove unavailable products
+    valid_items = []
+    for item in merged_items.values():
+        product = await db.products.find_one({"id": item["product_id"]})
+        if product and product.get("is_available", True) and not product.get("is_sold_out", False):
+            # Verify variant still exists
+            variants = product.get("variants", [])
+            variant_exists = any(v["weight"] == item["variant_weight"] for v in variants)
+            if variant_exists:
+                valid_items.append(item)
+    
+    # Update cart
+    await db.carts.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {
+            "items": valid_items,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Cart synced successfully", "items": valid_items}
 
 # Include the router in the main app
 app.include_router(api_router)
