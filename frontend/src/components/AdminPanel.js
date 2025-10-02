@@ -1972,11 +1972,124 @@ const BannerForm = ({ banner, onSuccess }) => {
     </form>
   );
 };
+// Notification Form Component
+const NotificationForm = ({ fetchNotifications }) => {
+  const [formData, setFormData] = useState({
+    title: '',
+    message: '',
+    target_audience: 'all',
+    notification_type: 'info'
+  });
+  const [sending, setSending] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSending(true);
+
+    try {
+      // Create notification
+      const response = await axios.post(
+        `${API}/notifications`,
+        formData,
+        { headers: getAuthHeaders() }
+      );
+
+      // Broadcast notification
+      await axios.post(
+        `${API}/notifications/${response.data.id}/broadcast`,
+        {},
+        { headers: getAuthHeaders() }
+      );
+
+      toast.success('Notification sent successfully!');
+      setFormData({ title: '', message: '', target_audience: 'all', notification_type: 'info' });
+      if (fetchNotifications) fetchNotifications();
+    } catch (error) {
+      console.error('Error sending notification:', error);
+      toast.error('Failed to send notification');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-2">Title</label>
+        <Input
+          value={formData.title}
+          onChange={(e) => setFormData({...formData, title: e.target.value})}
+          placeholder="Notification title"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-2">Message</label>
+        <textarea
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          rows="4"
+          value={formData.message}
+          onChange={(e) => setFormData({...formData, message: e.target.value})}
+          placeholder="Notification message"
+          required
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-2">Target Audience</label>
+          <Select 
+            value={formData.target_audience}
+            onValueChange={(value) => setFormData({...formData, target_audience: value})}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Users</SelectItem>
+              <SelectItem value="active">Active Users</SelectItem>
+              <SelectItem value="inactive">Inactive Users</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium mb-2">Type</label>
+          <Select
+            value={formData.notification_type}
+            onValueChange={(value) => setFormData({...formData, notification_type: value})}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="info">Info</SelectItem>
+              <SelectItem value="promo">Promotion</SelectItem>
+              <SelectItem value="alert">Alert</SelectItem>
+              <SelectItem value="update">Update</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <Button
+        type="submit"
+        disabled={sending}
+        className="w-full bg-orange-500 hover:bg-orange-600"
+      >
+        {sending ? 'Sending...' : 'Send Notification'}
+      </Button>
+    </form>
+  );
+};
+
 // Settings Management Component
 const SettingsManagement = () => {
   const [themes, setThemes] = useState([]);
   const [banners, setBanners] = useState([]);
   const [coupons, setCoupons] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [activeTab, setActiveTab] = useState('themes');
   const [loading, setLoading] = useState(false);
 
@@ -1987,6 +2100,8 @@ const SettingsManagement = () => {
       fetchBanners();
     } else if (activeTab === 'coupons') {
       fetchCoupons();
+    } else if (activeTab === 'notifications') {
+      fetchNotifications();
     }
   }, [activeTab]);
 
@@ -2032,12 +2147,27 @@ const SettingsManagement = () => {
     }
   };
 
+  const fetchNotifications = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/notifications/admin/all`, {
+        headers: getAuthHeaders()
+      });
+      setNotifications(response.data);
+    } catch (error) {
+      console.error('Error fetching notifications:', error);
+      toast.error('Failed to fetch notifications');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold text-gray-900">Settings & Configuration</h2>
       
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-3">
+        <TabsList className="grid w-full grid-cols-4">
           <TabsTrigger value="themes">
             <Palette className="w-4 h-4 mr-2" />
             Themes
@@ -2049,6 +2179,10 @@ const SettingsManagement = () => {
           <TabsTrigger value="coupons">
             <Package className="w-4 h-4 mr-2" />
             Coupons
+          </TabsTrigger>
+          <TabsTrigger value="notifications">
+            <MessageSquare className="w-4 h-4 mr-2" />
+            Notifications
           </TabsTrigger>
         </TabsList>
 
@@ -2102,6 +2236,17 @@ const SettingsManagement = () => {
 
         <TabsContent value="coupons">
           <CouponManagement coupons={coupons} fetchCoupons={fetchCoupons} loading={loading} />
+        </TabsContent>
+
+        <TabsContent value="notifications">
+          <Card>
+            <CardHeader>
+              <CardTitle>Send Notification</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <NotificationForm fetchNotifications={fetchNotifications} />
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>

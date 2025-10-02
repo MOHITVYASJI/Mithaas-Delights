@@ -2382,6 +2382,39 @@ async def mark_notification_read(
     
     return {"message": "Notification marked as read"}
 
+@api_router.put("/notifications/{notification_id}/mark-read")
+async def mark_notification_as_read(
+    notification_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Mark notification as read (alternative endpoint for frontend compatibility)"""
+    current_user = await get_current_user(credentials, db)
+    
+    result = await db.user_notifications.update_one(
+        {"id": notification_id, "user_id": current_user["id"]},
+        {"$set": {"is_read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    return {"message": "Notification marked as read"}
+
+@api_router.put("/notifications/mark-all-read")
+async def mark_all_notifications_read(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Mark all notifications as read for current user"""
+    current_user = await get_current_user(credentials, db)
+    
+    result = await db.user_notifications.update_many(
+        {"user_id": current_user["id"], "is_read": False},
+        {"$set": {"is_read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {
+        "message": "All notifications marked as read",
+        "count": result.modified_count
+    }
+
 @api_router.get("/notifications/unread-count")
 async def get_unread_count(credentials: HTTPAuthorizationCredentials = Security(security)):
     """Get count of unread notifications"""

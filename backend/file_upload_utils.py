@@ -9,7 +9,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Create uploads directory
-UPLOAD_DIR = Path("/app/backend/uploads")
+UPLOAD_DIR = Path("/Mithaas Delights/backend/uploads")
 UPLOAD_DIR.mkdir(exist_ok=True)
 
 # Create subdirectories

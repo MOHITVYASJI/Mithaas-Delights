@@ -10,7 +10,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "./components/ui/dropdown-menu";
 import { AdminPanel } from "./components/AdminPanel";
 import { CartDialog } from "./components/CartCheckout";
-import { ChatBot } from "./components/ChatBot";
 import { AuthModals } from "./components/auth/AuthModel";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import { Toaster } from "./components/ui/sonner";
@@ -22,6 +21,11 @@ import { MediaGalleryPage } from "./pages/MediaGalleryPage";
 import { OrderSuccessPage } from "./pages/OrderSuccessPage";
 import { OrderTrackingPage } from "./pages/OrderTrackingPage";
 import { loadCartFromLocalStorage, saveCartToLocalStorage, clearCartFromLocalStorage } from "./utils/cartStorage";
+import { BannerCarousel } from "./components/BannerCarousel";
+import { NotificationSystem } from "./components/NotificationSystem";
+import { ThemeSwitcher } from "./components/ThemeSwitcher";
+import { VoiceChatBot } from "./components/VoiceChatBot";
+import { AdvertisementSection } from "./components/AdvertisementSection";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
 
@@ -196,6 +200,8 @@ const Header = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-3">
+            <ThemeSwitcher />
+            <NotificationSystem isAuthenticated={isAuthenticated} />
             <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
               <DialogTrigger asChild>
                 <Button variant="ghost" size="sm" data-testid="search-button">
@@ -1439,6 +1445,8 @@ const ProfilePage = () => {
 
 // Main Home Component
 const Home = () => {
+  const { isAuthenticated } = useAuth();
+  
   useEffect(() => {
     // Initialize sample data and admin user
     const initializeData = async () => {
@@ -1457,10 +1465,15 @@ const Home = () => {
     <div className="min-h-screen bg-white">
       <Header />
       <HeroSection />
+      <div className="container mx-auto px-4 py-8">
+        <BannerCarousel />
+      </div>
       <ProductsSection />
+      <AdvertisementSection />
       <AboutSection />
       <ContactSection />
       <Footer />
+      <VoiceChatBot isAuthenticated={isAuthenticated} />
     </div>
   );
 };
@@ -1623,7 +1636,6 @@ function App() {
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </BrowserRouter>
-          <ChatBot />
           <Toaster />
         </div>
       </CartProvider>
