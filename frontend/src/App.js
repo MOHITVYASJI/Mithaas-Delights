@@ -21,54 +21,80 @@ import { BulkOrderPage } from "./pages/BulkOrderPage";
 import { MediaGalleryPage } from "./pages/MediaGalleryPage";
 import { OrderSuccessPage } from "./pages/OrderSuccessPage";
 import { OrderTrackingPage } from "./pages/OrderTrackingPage";
+import { loadCartFromLocalStorage, saveCartToLocalStorage, clearCartFromLocalStorage } from "./utils/cartStorage";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
-// Context for cart management
+// Context for cart management with proper variant support
 const CartContext = createContext();
 
 const CartProvider = ({ children }) => {
   const [cartItems, setCartItems] = useState([]);
   const [cartCount, setCartCount] = useState(0);
 
+  // Load cart from localStorage on mount
+  useEffect(() => {
+    const savedCart = loadCartFromLocalStorage();
+    if (savedCart && savedCart.length > 0) {
+      setCartItems(savedCart);
+    }
+  }, []);
+
+  // Save cart to localStorage whenever it changes
+  useEffect(() => {
+    if (cartItems.length >= 0) {
+      saveCartToLocalStorage(cartItems);
+    }
+  }, [cartItems]);
+
+  // Generate unique cart item key: product_id + variant_weight
+  const getCartItemKey = (item) => `${item.id}-${item.weight || 'default'}`;
+
   const addToCart = (product, quantity = 1) => {
     setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.id === product.id);
+      const productKey = getCartItemKey(product);
+      const existingItem = prevItems.find(item => getCartItemKey(item) === productKey);
+      
       if (existingItem) {
+        // Item with same product ID and variant exists, update quantity
         const updatedItems = prevItems.map(item =>
-          item.id === product.id
+          getCartItemKey(item) === productKey
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
         return updatedItems;
       } else {
+        // New item (or same product with different variant)
         return [...prevItems, { ...product, quantity }];
       }
     });
-    toast.success(`${product.name} added to cart!`);
+    
+    const variantText = product.weight ? ` (${product.weight})` : '';
+    toast.success(`${product.name}${variantText} added to cart!`);
   };
 
-  const removeFromCart = (productId) => {
-    setCartItems(prevItems => prevItems.filter(item => item.id !== productId));
+  const removeFromCart = (productKey) => {
+    setCartItems(prevItems => prevItems.filter(item => getCartItemKey(item) !== productKey));
   };
 
-  const updateQuantity = (productId, newQuantity) => {
+  const updateQuantity = (productKey, newQuantity) => {
     if (newQuantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(productKey);
       return;
     }
     setCartItems(prevItems =>
       prevItems.map(item =>
-        item.id === productId ? { ...item, quantity: newQuantity } : item
+        getCartItemKey(item) === productKey ? { ...item, quantity: newQuantity } : item
       )
     );
   };
 
   const clearCart = () => {
     setCartItems([]);
+    clearCartFromLocalStorage();
   };
 
   const getTotalPrice = () => {

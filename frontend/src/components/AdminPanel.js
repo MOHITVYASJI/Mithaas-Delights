@@ -1168,6 +1168,810 @@ const ReviewEditForm = ({ review, onSuccess }) => {
   );
 };
 
+// Banner Management Component with CRUD
+const BannerManagement = ({ banners, fetchBanners, loading }) => {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editBanner, setEditBanner] = useState(null);
+
+  const handleDeleteBanner = async (bannerId) => {
+    if (window.confirm('Are you sure you want to delete this banner?')) {
+      try {
+        await axios.delete(`${API}/banners/${bannerId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Banner deleted successfully');
+        fetchBanners();
+      } catch (error) {
+        toast.error('Failed to delete banner');
+      }
+    }
+  };
+
+  const toggleBannerStatus = async (bannerId, currentStatus) => {
+    try {
+      await axios.put(`${API}/banners/${bannerId}`, {
+        is_active: !currentStatus
+      }, {
+        headers: getAuthHeaders()
+      });
+      toast.success(`Banner ${!currentStatus ? 'activated' : 'deactivated'}`);
+      fetchBanners();
+    } catch (error) {
+      toast.error('Failed to update banner status');
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Festival Banners</CardTitle>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-orange-500 hover:bg-orange-600" data-testid="add-banner-button">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Banner
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add New Banner</DialogTitle>
+            </DialogHeader>
+            <BannerForm onSuccess={() => {
+              setIsAddDialogOpen(false);
+              fetchBanners();
+            }} />
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+          </div>
+        ) : banners.length === 0 ? (
+          <p className="text-center text-gray-500 py-8">No banners configured yet</p>
+        ) : (
+          <div className="space-y-4">
+            {banners.map((banner) => (
+              <div key={banner.id} className="flex items-center gap-4 p-4 border rounded-lg hover:shadow-md transition-shadow">
+                <img 
+                  src={banner.image_url} 
+                  alt={banner.title}
+                  className="w-32 h-20 object-cover rounded"
+                />
+                <div className="flex-1">
+                  <h4 className="font-semibold text-lg">{banner.title}</h4>
+                  <p className="text-sm text-gray-600">{banner.festival_name}</p>
+                  {banner.description && (
+                    <p className="text-xs text-gray-500 mt-1">{banner.description}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant={banner.is_active ? 'default' : 'secondary'}>
+                    {banner.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => toggleBannerStatus(banner.id, banner.is_active)}
+                  >
+                    {banner.is_active ? 'Deactivate' : 'Activate'}
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => setEditBanner(banner)}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleDeleteBanner(banner.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {/* Edit Banner Dialog */}
+      <Dialog open={!!editBanner} onOpenChange={() => setEditBanner(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Banner</DialogTitle>
+          </DialogHeader>
+          {editBanner && (
+            <BannerForm 
+              banner={editBanner}
+              onSuccess={() => {
+                setEditBanner(null);
+                fetchBanners();
+              }} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+};
+
+// // Banner Form Component
+// const BannerForm = ({ banner, onSuccess }) => {
+//   const isEdit = !!banner;
+//   const [formData, setFormData] = useState({
+//     title: banner?.title || '',
+//     image_url: banner?.image_url || '',
+//     festival_name: banner?.festival_name || '',
+//     description: banner?.description || '',
+//     cta_text: banner?.cta_text || 'Shop Now',
+//     cta_link: banner?.cta_link || '',
+//     is_active: banner?.is_active ?? true,
+//     display_order: banner?.display_order || 0
+//   });
+//   const [submitting, setSubmitting] = useState(false);
+
+//   const handleSubmit = async (e) => {
+//     e.preventDefault();
+//     setSubmitting(true);
+
+//     try {
+//       if (isEdit) {
+//         await axios.put(`${API}/banners/${banner.id}`, formData, {
+//           headers: getAuthHeaders()
+//         });
+//         toast.success('Banner updated successfully');
+//       } else {
+//         await axios.post(`${API}/banners`, formData, {
+//           headers: getAuthHeaders()
+//         });
+//         toast.success('Banner added successfully');
+//       }
+//       onSuccess();
+//     } catch (error) {
+//       console.error('Error saving banner:', error);
+//       toast.error('Failed to save banner');
+//     } finally {
+//       setSubmitting(false);
+//     }
+//   };
+
+//   return (
+//     <form onSubmit={handleSubmit} className="space-y-4">
+//       <div>
+//         <label className="block text-sm font-medium mb-1">Title *</label>
+//         <Input
+//           value={formData.title}
+//           onChange={(e) => setFormData({...formData, title: e.target.value})}
+//           placeholder="Diwali Special Offer"
+//           required
+//         />
+//       </div>
+//       <div>
+//         <label className="block text-sm font-medium mb-1">Festival Name *</label>
+//         <Input
+//           value={formData.festival_name}
+//           onChange={(e) => setFormData({...formData, festival_name: e.target.value})}
+//           placeholder="Diwali"
+//           required
+//         />
+//       </div>
+//       <div>
+//         <label className="block text-sm font-medium mb-1">Image URL *</label>
+//         <Input
+//           type="url"
+//           value={formData.image_url}
+//           onChange={(e) => setFormData({...formData, image_url: e.target.value})}
+//           placeholder="https://example.com/banner.jpg"
+//           required
+//         />
+//       </div>
+//       <div>
+//         <label className="block text-sm font-medium mb-1">Description</label>
+//         <textarea
+//           value={formData.description}
+//           onChange={(e) => setFormData({...formData, description: e.target.value})}
+//           placeholder="Banner description"
+//           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+//           rows="3"
+//         />
+//       </div>
+//       <div className="grid grid-cols-2 gap-4">
+//         <div>
+//           <label className="block text-sm font-medium mb-1">CTA Text</label>
+//           <Input
+//             value={formData.cta_text}
+//             onChange={(e) => setFormData({...formData, cta_text: e.target.value})}
+//             placeholder="Shop Now"
+//           />
+//         </div>
+//         <div>
+//           <label className="block text-sm font-medium mb-1">Display Order</label>
+//           <Input
+//             type="number"
+//             value={formData.display_order}
+//             onChange={(e) => setFormData({...formData, display_order: parseInt(e.target.value)})}
+//             placeholder="0"
+//           />
+//         </div>
+//       </div>
+//       <div className="flex items-center space-x-2">
+//         <input
+//           type="checkbox"
+//           checked={formData.is_active}
+//           onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+//           className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+//         />
+//         <label className="text-sm font-medium">Active</label>
+//       </div>
+//       <div className="flex justify-end space-x-2 pt-4">
+//         <Button type="button" variant="outline" onClick={onSuccess}>
+//           Cancel
+//         </Button>
+//         <Button 
+//           type="submit" 
+//           disabled={submitting}
+//           className="bg-orange-500 hover:bg-orange-600"
+//         >
+//           {submitting ? 'Saving...' : isEdit ? 'Update Banner' : 'Add Banner'}
+//         </Button>
+//       </div>
+//     </form>
+//   );
+// };
+
+// Coupon Management Component with CRUD
+const CouponManagement = ({ coupons, fetchCoupons, loading }) => {
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editCoupon, setEditCoupon] = useState(null);
+
+  const handleDeleteCoupon = async (couponId) => {
+    if (window.confirm('Are you sure you want to delete this coupon?')) {
+      try {
+        await axios.delete(`${API}/coupons/${couponId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Coupon deleted successfully');
+        fetchCoupons();
+      } catch (error) {
+        toast.error('Failed to delete coupon');
+      }
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle>Discount Coupons</CardTitle>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-orange-500 hover:bg-orange-600" data-testid="add-coupon-button">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Coupon
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add New Coupon</DialogTitle>
+            </DialogHeader>
+            <CouponForm onSuccess={() => {
+              setIsAddDialogOpen(false);
+              fetchCoupons();
+            }} />
+          </DialogContent>
+        </Dialog>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <div className="text-center py-8">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+          </div>
+        ) : coupons.length === 0 ? (
+          <p className="text-center text-gray-500 py-8">No coupons configured yet</p>
+        ) : (
+          <div className="space-y-4">
+            {coupons.map((coupon) => (
+              <div key={coupon.id} className="flex items-center justify-between p-4 border rounded-lg hover:shadow-md transition-shadow">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h4 className="font-bold text-lg font-mono">{coupon.code}</h4>
+                    <Badge variant={coupon.is_active ? 'default' : 'secondary'}>
+                      {coupon.is_active ? 'Active' : 'Inactive'}
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-gray-600">
+                    {coupon.discount_percentage}% off • Min Order: ₹{coupon.min_order_amount}
+                  </p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Used: {coupon.used_count}{coupon.usage_limit ? `/${coupon.usage_limit}` : ''} • 
+                    Expires: {new Date(coupon.expiry_date).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => setEditCoupon(coupon)}
+                  >
+                    <Edit className="w-4 h-4" />
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline"
+                    onClick={() => handleDeleteCoupon(coupon.id)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {/* Edit Coupon Dialog */}
+      <Dialog open={!!editCoupon} onOpenChange={() => setEditCoupon(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Coupon</DialogTitle>
+          </DialogHeader>
+          {editCoupon && (
+            <CouponForm 
+              coupon={editCoupon}
+              onSuccess={() => {
+                setEditCoupon(null);
+                fetchCoupons();
+              }} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+};
+
+// Coupon Form Component
+const CouponForm = ({ coupon, onSuccess }) => {
+  const isEdit = !!coupon;
+  const [formData, setFormData] = useState({
+    code: coupon?.code || '',
+    discount_percentage: coupon?.discount_percentage || 10,
+    max_discount_amount: coupon?.max_discount_amount || null,
+    min_order_amount: coupon?.min_order_amount || 0,
+    expiry_date: coupon?.expiry_date ? new Date(coupon.expiry_date).toISOString().split('T')[0] : '',
+    usage_limit: coupon?.usage_limit || null,
+    is_active: coupon?.is_active ?? true
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const submitData = {
+        ...formData,
+        expiry_date: new Date(formData.expiry_date).toISOString()
+      };
+
+      if (isEdit) {
+        await axios.put(`${API}/coupons/${coupon.id}`, submitData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Coupon updated successfully');
+      } else {
+        await axios.post(`${API}/coupons`, submitData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Coupon added successfully');
+      }
+      onSuccess();
+    } catch (error) {
+      console.error('Error saving coupon:', error);
+      toast.error(error.response?.data?.detail || 'Failed to save coupon');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1">Coupon Code *</label>
+        <Input
+          value={formData.code}
+          onChange={(e) => setFormData({...formData, code: e.target.value.toUpperCase()})}
+          placeholder="FESTIVE50"
+          className="font-mono uppercase"
+          required
+          disabled={isEdit}
+        />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Discount % *</label>
+          <Input
+            type="number"
+            value={formData.discount_percentage}
+            onChange={(e) => setFormData({...formData, discount_percentage: parseInt(e.target.value)})}
+            min="1"
+            max="100"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Max Discount Amount</label>
+          <Input
+            type="number"
+            value={formData.max_discount_amount || ''}
+            onChange={(e) => setFormData({...formData, max_discount_amount: e.target.value ? parseFloat(e.target.value) : null})}
+            placeholder="No limit"
+          />
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Min Order Amount</label>
+          <Input
+            type="number"
+            value={formData.min_order_amount}
+            onChange={(e) => setFormData({...formData, min_order_amount: parseFloat(e.target.value)})}
+            placeholder="0"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Usage Limit</label>
+          <Input
+            type="number"
+            value={formData.usage_limit || ''}
+            onChange={(e) => setFormData({...formData, usage_limit: e.target.value ? parseInt(e.target.value) : null})}
+            placeholder="Unlimited"
+          />
+        </div>
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Expiry Date *</label>
+        <Input
+          type="date"
+          value={formData.expiry_date}
+          onChange={(e) => setFormData({...formData, expiry_date: e.target.value})}
+          required
+        />
+      </div>
+      <div className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          checked={formData.is_active}
+          onChange={(e) => setFormData({...formData, is_active: e.target.checked})}
+          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+        />
+        <label className="text-sm font-medium">Active</label>
+      </div>
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={submitting}
+          className="bg-orange-500 hover:bg-orange-600"
+        >
+          {submitting ? 'Saving...' : isEdit ? 'Update Coupon' : 'Add Coupon'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+
+// // Banner Management Component
+// const BannerManagement = ({ banners, fetchBanners, loading }) => {
+//   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+//   const [editBanner, setEditBanner] = useState(null);
+
+//   const handleDelete = async (bannerId) => {
+//     if (window.confirm('Are you sure you want to delete this banner?')) {
+//       try {
+//         await axios.delete(`${API}/banners/${bannerId}`, {
+//           headers: getAuthHeaders()
+//         });
+//         toast.success('Banner deleted successfully');
+//         fetchBanners();
+//       } catch (error) {
+//         toast.error('Failed to delete banner');
+//       }
+//     }
+//   };
+
+//   const handleToggleStatus = async (bannerId, currentStatus) => {
+//     try {
+//       await axios.put(`${API}/banners/${bannerId}/toggle`, {}, {
+//         headers: getAuthHeaders()
+//       });
+//       toast.success(`Banner ${currentStatus ? 'deactivated' : 'activated'} successfully`);
+//       fetchBanners();
+//     } catch (error) {
+//       toast.error('Failed to update banner status');
+//     }
+//   };
+
+//   return (
+//     <div className="space-y-6">
+//       <div className="flex justify-between items-center">
+//         <h2 className="text-2xl font-bold text-gray-900">Banner Management</h2>
+//         <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+//           <DialogTrigger asChild>
+//             <Button className="bg-orange-500 hover:bg-orange-600">
+//               <Plus className="w-4 h-4 mr-2" />
+//               Add Banner
+//             </Button>
+//           </DialogTrigger>
+//           <DialogContent className="max-w-2xl">
+//             <DialogHeader>
+//               <DialogTitle>Add New Banner</DialogTitle>
+//             </DialogHeader>
+//             <BannerForm onSuccess={() => {
+//               setIsAddDialogOpen(false);
+//               fetchBanners();
+//             }} />
+//           </DialogContent>
+//         </Dialog>
+//       </div>
+
+//       <Card>
+//         <CardContent className="p-6">
+//           {loading ? (
+//             <div className="text-center py-8">
+//               <p className="text-gray-500">Loading banners...</p>
+//             </div>
+//           ) : (
+//             <div className="space-y-4">
+//               {banners.map((banner) => (
+//                 <div key={banner.id} className="flex items-center justify-between p-4 border rounded-lg">
+//                   <div className="flex-1">
+//                     <div className="flex items-center space-x-4">
+//                       {banner.image_url && (
+//                         <img 
+//                           src={banner.image_url} 
+//                           alt={banner.title}
+//                           className="w-16 h-16 object-cover rounded-lg"
+//                         />
+//                       )}
+//                       <div>
+//                         <h4 className="font-semibold text-lg">{banner.title}</h4>
+//                         <p className="text-sm text-gray-600">{banner.festival_name}</p>
+//                         {banner.description && (
+//                           <p className="text-sm text-gray-500 mt-1">{banner.description}</p>
+//                         )}
+//                       </div>
+//                     </div>
+//                   </div>
+//                   <div className="flex items-center space-x-2">
+//                     <Badge variant={banner.is_active ? 'default' : 'secondary'}>
+//                       {banner.is_active ? 'Active' : 'Inactive'}
+//                     </Badge>
+//                     <Button 
+//                       size="sm" 
+//                       variant="outline"
+//                       onClick={() => setEditBanner(banner)}
+//                     >
+//                       <Edit className="w-4 h-4" />
+//                     </Button>
+//                     <Button 
+//                       size="sm" 
+//                       variant="outline"
+//                       onClick={() => handleToggleStatus(banner.id, banner.is_active)}
+//                     >
+//                       {banner.is_active ? 'Deactivate' : 'Activate'}
+//                     </Button>
+//                     <Button 
+//                       size="sm" 
+//                       variant="outline"
+//                       onClick={() => handleDelete(banner.id)}
+//                       className="text-red-600 hover:text-red-700"
+//                     >
+//                       <Trash2 className="w-4 h-4" />
+//                     </Button>
+//                   </div>
+//                 </div>
+//               ))}
+//               {banners.length === 0 && (
+//                 <div className="text-center py-8">
+//                   <p className="text-gray-500">No banners configured yet</p>
+//                 </div>
+//               )}
+//             </div>
+//           )}
+//         </CardContent>
+//       </Card>
+
+//       {/* Edit Banner Dialog */}
+//       <Dialog open={!!editBanner} onOpenChange={() => setEditBanner(null)}>
+//         <DialogContent className="max-w-2xl">
+//           <DialogHeader>
+//             <DialogTitle>Edit Banner</DialogTitle>
+//           </DialogHeader>
+//           {editBanner && (
+//             <BannerForm 
+//               banner={editBanner}
+//               onSuccess={() => {
+//                 setEditBanner(null);
+//                 fetchBanners();
+//               }} 
+//             />
+//           )}
+//         </DialogContent>
+//       </Dialog>
+//     </div>
+//   );
+// };
+
+// Banner Form Component (Add/Edit)
+const BannerForm = ({ banner, onSuccess }) => {
+  const isEdit = !!banner;
+  const [formData, setFormData] = useState({
+    title: banner?.title || '',
+    description: banner?.description || '',
+    festival_name: banner?.festival_name || '',
+    image_url: banner?.image_url || '',
+    link_url: banner?.link_url || '',
+    is_active: banner?.is_active || false,
+    start_date: banner?.start_date || '',
+    end_date: banner?.end_date || ''
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const bannerData = {
+        ...formData,
+        start_date: formData.start_date || null,
+        end_date: formData.end_date || null
+      };
+
+      if (isEdit) {
+        await axios.put(`${API}/banners/${banner.id}`, bannerData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Banner updated successfully');
+      } else {
+        await axios.post(`${API}/banners`, bannerData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Banner added successfully');
+      }
+      onSuccess();
+    } catch (error) {
+      console.error('Error saving banner:', error);
+      toast.error('Failed to save banner');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Banner Title *</label>
+          <Input
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            placeholder="e.g., Diwali Special Offer"
+            required
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Festival Name</label>
+          <Input
+            name="festival_name"
+            value={formData.festival_name}
+            onChange={handleChange}
+            placeholder="e.g., Diwali, Holi, Eid"
+          />
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Description</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleChange}
+          placeholder="Banner description"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          rows="3"
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Image URL *</label>
+        <Input
+          name="image_url"
+          type="url"
+          value={formData.image_url}
+          onChange={handleChange}
+          placeholder="https://example.com/banner.jpg"
+          required
+        />
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Link URL</label>
+        <Input
+          name="link_url"
+          type="url"
+          value={formData.link_url}
+          onChange={handleChange}
+          placeholder="https://example.com/promotion"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <Input
+            name="start_date"
+            type="date"
+            value={formData.start_date}
+            onChange={handleChange}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">End Date</label>
+          <Input
+            name="end_date"
+            type="date"
+            value={formData.end_date}
+            onChange={handleChange}
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          name="is_active"
+          checked={formData.is_active}
+          onChange={handleChange}
+          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+        />
+        <label className="text-sm font-medium">Active</label>
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={submitting}
+          className="bg-orange-500 hover:bg-orange-600"
+        >
+          {submitting ? 'Saving...' : isEdit ? 'Update Banner' : 'Add Banner'}
+        </Button>
+      </div>
+    </form>
+  );
+};
 // Settings Management Component
 const SettingsManagement = () => {
   const [themes, setThemes] = useState([]);
@@ -1293,66 +2097,11 @@ const SettingsManagement = () => {
         </TabsContent>
 
         <TabsContent value="banners">
-          <Card>
-            <CardHeader>
-              <CardTitle>Festival Banners</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Manage festival-specific banners and promotional content.
-              </p>
-              <div className="space-y-4">
-                {banners.map((banner) => (
-                  <div key={banner.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-semibold">{banner.title}</h4>
-                      <p className="text-sm text-gray-600">{banner.festival_name}</p>
-                    </div>
-                    <Badge variant={banner.is_active ? 'default' : 'secondary'}>
-                      {banner.is_active ? 'Active' : 'Inactive'}
-                    </Badge>
-                  </div>
-                ))}
-                {banners.length === 0 && !loading && (
-                  <p className="text-center text-gray-500 py-8">No banners configured yet</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <BannerManagement banners={banners} fetchBanners={fetchBanners} loading={loading} />
         </TabsContent>
 
         <TabsContent value="coupons">
-          <Card>
-            <CardHeader>
-              <CardTitle>Discount Coupons</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Manage discount codes and promotional offers.
-              </p>
-              <div className="space-y-4">
-                {coupons.map((coupon) => (
-                  <div key={coupon.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-semibold">{coupon.code}</h4>
-                      <p className="text-sm text-gray-600">{coupon.discount_percentage}% off</p>
-                    </div>
-                    <div className="text-right">
-                      <Badge variant={coupon.is_active ? 'default' : 'secondary'}>
-                        {coupon.is_active ? 'Active' : 'Inactive'}
-                      </Badge>
-                      <p className="text-xs text-gray-500 mt-1">
-                        Used: {coupon.used_count}{coupon.usage_limit ? `/${coupon.usage_limit}` : ''}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-                {coupons.length === 0 && !loading && (
-                  <p className="text-center text-gray-500 py-8">No coupons configured yet</p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
+          <CouponManagement coupons={coupons} fetchCoupons={fetchCoupons} loading={loading} />
         </TabsContent>
       </Tabs>
     </div>

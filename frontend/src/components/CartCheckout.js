@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, Plus, Minus, Trash2, CreditCard, User, MapPin, Phone, X } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, CreditCard, User, MapPin, Phone, X, Truck, Tag } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -10,6 +10,7 @@ import { Separator } from './ui/separator';
 import { toast } from 'sonner';
 import { useCart } from '../App';
 import { useAuth } from '../contexts/AuthContext';
+import { RazorpayCheckout } from './RazorpayCheckout';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
