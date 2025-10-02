@@ -1,236 +1,315 @@
-"""
-Notification System for Mithaas Delights API
-Handles user notifications, broadcasts, and admin notification management
-"""
-
-from fastapi import APIRouter, HTTPException, Security
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from pydantic import BaseModel, Field
-from typing import List, Optional
-from datetime import datetime, timezone
-from enum import Enum
+# notification_system.py - Comprehensive Notification System
+import os
 import uuid
+import json
+from datetime import datetime, timezone
+from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+from motor.motor_asyncio import AsyncIOMotorCollection
 import logging
-from motor.motor_asyncio import AsyncIOMotorDatabase
 
-# Setup logging
 logger = logging.getLogger(__name__)
 
-# Security
-security = HTTPBearer()
-
-# Create router
-notification_router = APIRouter(prefix="/api", tags=["notifications"])
-
-# ==================== MODELS ====================
-
-class NotificationType(str, Enum):
+# Notification Models
+class NotificationType:
+    GENERAL = "general"
     OFFER = "offer"
     FESTIVAL = "festival"
     ORDER_UPDATE = "order_update"
-    NEW_PRODUCT = "new_product"
-    GENERAL = "general"
+    SYSTEM = "system"
+
+class NotificationStatus:
+    PENDING = "pending"
+    SENT = "sent"
+    READ = "read"
+    DISMISSED = "dismissed"
 
 class Notification(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     message: str
-    type: NotificationType = NotificationType.GENERAL
-    target_users: List[str] = []  # Empty means all users
-    is_broadcast: bool = False
-    link: Optional[str] = None
+    notification_type: str = NotificationType.GENERAL
+    target_audience: str = "all"  # "all", "users", "specific_user_id"
+    target_user_id: Optional[str] = None
     image_url: Optional[str] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    action_url: Optional[str] = None
+    action_text: Optional[str] = None
+    status: str = NotificationStatus.PENDING
+    is_push_notification: bool = True
+    is_in_app_notification: bool = True
+    priority: str = "normal"  # "low", "normal", "high", "urgent"
     expires_at: Optional[datetime] = None
-    is_active: bool = True
+    created_by: str  # admin user id
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    sent_at: Optional[datetime] = None
+    read_at: Optional[datetime] = None
 
 class NotificationCreate(BaseModel):
     title: str
     message: str
-    type: NotificationType = NotificationType.GENERAL
-    is_broadcast: bool = False
-    target_users: List[str] = []
-    link: Optional[str] = None
+    notification_type: str = NotificationType.GENERAL
+    target_audience: str = "all"
+    target_user_id: Optional[str] = None
     image_url: Optional[str] = None
+    action_url: Optional[str] = None
+    action_text: Optional[str] = None
+    is_push_notification: bool = True
+    is_in_app_notification: bool = True
+    priority: str = "normal"
     expires_at: Optional[datetime] = None
 
-class UserNotification(BaseModel):
+class UserNotificationStatus(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
     notification_id: str
-    is_read: bool = False
+    user_id: str
+    status: str = NotificationStatus.SENT
     read_at: Optional[datetime] = None
+    dismissed_at: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
-# ==================== HELPER FUNCTIONS ====================
-
-def prepare_for_mongo(data):
-    """Convert datetime objects to ISO strings for MongoDB storage"""
-    if isinstance(data.get('created_at'), datetime):
-        data['created_at'] = data['created_at'].isoformat()
-    if isinstance(data.get('updated_at'), datetime):
-        data['updated_at'] = data['updated_at'].isoformat()
-    if isinstance(data.get('expires_at'), datetime):
-        data['expires_at'] = data['expires_at'].isoformat()
-    if isinstance(data.get('read_at'), datetime):
-        data['read_at'] = data['read_at'].isoformat()
-    return data
-
-def parse_from_mongo(item):
-    """Parse MongoDB document back to Python objects"""
-    if isinstance(item.get('created_at'), str):
-        item['created_at'] = datetime.fromisoformat(item['created_at'])
-    if isinstance(item.get('updated_at'), str):
-        item['updated_at'] = datetime.fromisoformat(item['updated_at'])
-    if isinstance(item.get('expires_at'), str):
-        item['expires_at'] = datetime.fromisoformat(item['expires_at'])
-    if isinstance(item.get('read_at'), str):
-        item['read_at'] = datetime.fromisoformat(item['read_at'])
-    return item
-
-# ==================== NOTIFICATION ENDPOINTS ====================
-
-def setup_notification_routes(db: AsyncIOMotorDatabase, get_current_user, get_current_admin_user):
-    """Setup notification routes with database and auth dependencies"""
+class NotificationManager:
+    def __init__(self, db):
+        self.db = db
+        self.notifications: AsyncIOMotorCollection = db.notifications
+        self.user_notification_status: AsyncIOMotorCollection = db.user_notification_status
     
-    @notification_router.post("/notifications")
     async def create_notification(
-        notification: NotificationCreate,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Create and send notification (Admin only)"""
-        await get_current_admin_user(credentials, db)
+        self, 
+        notification_data: NotificationCreate, 
+        created_by: str
+    ) -> Notification:
+        """Create a new notification"""
+        notification = Notification(
+            **notification_data.dict(),
+            created_by=created_by
+        )
         
-        notif_obj = Notification(**notification.dict())
-        await db.notifications.insert_one(prepare_for_mongo(notif_obj.dict()))
+        # Insert into database
+        await self.notifications.insert_one(self._prepare_for_mongo(notification.dict()))
         
-        # Create user notifications
-        if notification.is_broadcast or not notification.target_users:
-            # Send to all active users
-            users = await db.users.find({"is_active": True}).to_list(length=None)
-            for user in users:
-                user_notif = UserNotification(
-                    user_id=user["id"],
-                    notification_id=notif_obj.id
-                )
-                await db.user_notifications.insert_one(prepare_for_mongo(user_notif.dict()))
-        else:
-            # Send to specific users
-            for user_id in notification.target_users:
-                user_notif = UserNotification(
-                    user_id=user_id,
-                    notification_id=notif_obj.id
-                )
-                await db.user_notifications.insert_one(prepare_for_mongo(user_notif.dict()))
+        # If targeting specific user, create user notification status
+        if notification.target_audience == "specific" and notification.target_user_id:
+            await self._create_user_notification_status(
+                notification.id, 
+                notification.target_user_id
+            )
         
-        logger.info(f"Notification created and sent: {notif_obj.title}")
-        return {"message": "Notification sent successfully", "notification_id": notif_obj.id}
-
-    @notification_router.get("/notifications/my")
-    async def get_my_notifications(
-        credentials: HTTPAuthorizationCredentials = Security(security),
-        unread_only: bool = False
-    ):
-        """Get current user's notifications"""
-        current_user = await get_current_user(credentials, db)
+        return notification
+    
+    async def broadcast_notification(
+        self, 
+        notification_id: str
+    ) -> Dict[str, Any]:
+        """Broadcast notification to target audience"""
+        notification = await self.notifications.find_one({"id": notification_id})
+        if not notification:
+            raise ValueError("Notification not found")
         
-        filter_query = {"user_id": current_user["id"]}
+        notification_obj = Notification(**self._parse_from_mongo(notification))
+        
+        # Get target users
+        target_users = await self._get_target_users(notification_obj)
+        
+        # Create user notification status for each target user
+        user_statuses = []
+        for user_id in target_users:
+            status = await self._create_user_notification_status(
+                notification_id, 
+                user_id
+            )
+            user_statuses.append(status)
+        
+        # Update notification status to sent
+        await self.notifications.update_one(
+            {"id": notification_id},
+            {
+                "$set": {
+                    "status": NotificationStatus.SENT,
+                    "sent_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        
+        return {
+            "notification_id": notification_id,
+            "target_user_count": len(target_users),
+            "broadcast_at": datetime.now(timezone.utc).isoformat()
+        }
+    
+    async def get_user_notifications(
+        self, 
+        user_id: str, 
+        unread_only: bool = False,
+        limit: int = 50
+    ) -> List[Dict[str, Any]]:
+        """Get notifications for a specific user"""
+        # Get user notification statuses
+        status_filter = {"user_id": user_id}
         if unread_only:
-            filter_query["is_read"] = False
+            status_filter["read_at"] = None
         
-        user_notifs = await db.user_notifications.find(filter_query).sort("created_at", -1).to_list(length=50)
+        user_statuses = await self.user_notification_status.find(
+            status_filter
+        ).sort("created_at", -1).limit(limit).to_list(length=limit)
         
-        # Fetch full notification details
+        # Get corresponding notifications
+        notification_ids = [status["notification_id"] for status in user_statuses]
+        notifications = await self.notifications.find(
+            {"id": {"$in": notification_ids}}
+        ).to_list(length=len(notification_ids))
+        
+        # Combine notification with user status
         result = []
-        for user_notif in user_notifs:
-            notif = await db.notifications.find_one({"id": user_notif["notification_id"]})
-            if notif and notif.get("is_active", True):
-                result.append({
-                    **parse_from_mongo(notif),
-                    "is_read": user_notif["is_read"],
-                    "user_notification_id": user_notif["id"]
-                })
+        for status in user_statuses:
+            notification = next(
+                (n for n in notifications if n["id"] == status["notification_id"]), 
+                None
+            )
+            if notification:
+                notification_data = self._parse_from_mongo(notification)
+                notification_data["user_status"] = self._parse_from_mongo(status)
+                result.append(notification_data)
         
         return result
-
-    @notification_router.put("/notifications/{user_notif_id}/read")
+    
     async def mark_notification_read(
-        user_notif_id: str,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Mark notification as read"""
-        current_user = await get_current_user(credentials, db)
-        
-        result = await db.user_notifications.update_one(
-            {"id": user_notif_id, "user_id": current_user["id"]},
-            {"$set": {"is_read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
+        self, 
+        notification_id: str, 
+        user_id: str
+    ) -> bool:
+        """Mark notification as read for a user"""
+        result = await self.user_notification_status.update_one(
+            {
+                "notification_id": notification_id,
+                "user_id": user_id
+            },
+            {
+                "$set": {
+                    "status": NotificationStatus.READ,
+                    "read_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
         )
-        
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Notification not found")
-        
-        return {"message": "Notification marked as read"}
-
-    @notification_router.get("/notifications/unread-count")
-    async def get_unread_count(credentials: HTTPAuthorizationCredentials = Security(security)):
-        """Get count of unread notifications"""
-        current_user = await get_current_user(credentials, db)
-        
-        count = await db.user_notifications.count_documents({
-            "user_id": current_user["id"],
-            "is_read": False
+        return result.modified_count > 0
+    
+    async def dismiss_notification(
+        self, 
+        notification_id: str, 
+        user_id: str
+    ) -> bool:
+        """Dismiss notification for a user"""
+        result = await self.user_notification_status.update_one(
+            {
+                "notification_id": notification_id,
+                "user_id": user_id
+            },
+            {
+                "$set": {
+                    "status": NotificationStatus.DISMISSED,
+                    "dismissed_at": datetime.now(timezone.utc).isoformat()
+                }
+            }
+        )
+        return result.modified_count > 0
+    
+    async def get_unread_count(self, user_id: str) -> int:
+        """Get count of unread notifications for a user"""
+        count = await self.user_notification_status.count_documents({
+            "user_id": user_id,
+            "read_at": None,
+            "status": {"$ne": NotificationStatus.DISMISSED}
         })
-        
-        return {"unread_count": count}
-
-    @notification_router.get("/notifications/admin/all")
-    async def get_all_notifications_admin(
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Get all notifications (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        
-        notifications = await db.notifications.find().sort("created_at", -1).to_list(length=None)
-        return [Notification(**parse_from_mongo(notif)) for notif in notifications]
-
-    @notification_router.delete("/notifications/{notification_id}")
-    async def delete_notification(
-        notification_id: str,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Delete notification (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        
-        result = await db.notifications.delete_one({"id": notification_id})
-        if result.deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Notification not found")
-        
-        # Also delete user notifications
-        await db.user_notifications.delete_many({"notification_id": notification_id})
-        
-        return {"message": "Notification deleted successfully"}
-
-    @notification_router.put("/notifications/{notification_id}")
-    async def update_notification(
-        notification_id: str,
-        notification_update: NotificationCreate,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Update notification (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        
-        update_dict = notification_update.dict()
-        update_dict["updated_at"] = datetime.now(timezone.utc)
-        
-        result = await db.notifications.update_one(
-            {"id": notification_id},
-            {"$set": prepare_for_mongo(update_dict)}
+        return count
+    
+    async def _create_user_notification_status(
+        self, 
+        notification_id: str, 
+        user_id: str
+    ) -> UserNotificationStatus:
+        """Create user notification status entry"""
+        status = UserNotificationStatus(
+            notification_id=notification_id,
+            user_id=user_id
         )
         
-        if result.matched_count == 0:
-            raise HTTPException(status_code=404, detail="Notification not found")
+        await self.user_notification_status.insert_one(
+            self._prepare_for_mongo(status.dict())
+        )
         
-        updated_notif = await db.notifications.find_one({"id": notification_id})
-        return Notification(**parse_from_mongo(updated_notif))
+        return status
+    
+    async def _get_target_users(self, notification: Notification) -> List[str]:
+        """Get list of user IDs to target for notification"""
+        if notification.target_audience == "specific" and notification.target_user_id:
+            return [notification.target_user_id]
+        elif notification.target_audience == "all":
+            # Get all active users
+            users = await self.db.users.find(
+                {"is_active": True},
+                {"id": 1}
+            ).to_list(length=None)
+            return [user["id"] for user in users]
+        elif notification.target_audience == "users":
+            # Get all non-admin active users
+            users = await self.db.users.find(
+                {"is_active": True, "role": "user"},
+                {"id": 1}
+            ).to_list(length=None)
+            return [user["id"] for user in users]
+        else:
+            return []
+    
+    def _prepare_for_mongo(self, data: dict) -> dict:
+        """Prepare data for MongoDB storage"""
+        if isinstance(data.get('created_at'), datetime):
+            data['created_at'] = data['created_at'].isoformat()
+        if isinstance(data.get('sent_at'), datetime):
+            data['sent_at'] = data['sent_at'].isoformat()
+        if isinstance(data.get('read_at'), datetime):
+            data['read_at'] = data['read_at'].isoformat()
+        if isinstance(data.get('dismissed_at'), datetime):
+            data['dismissed_at'] = data['dismissed_at'].isoformat()
+        if isinstance(data.get('expires_at'), datetime):
+            data['expires_at'] = data['expires_at'].isoformat()
+        return data
+    
+    def _parse_from_mongo(self, item: dict) -> dict:
+        """Parse MongoDB document back to Python objects"""
+        if isinstance(item.get('created_at'), str):
+            item['created_at'] = datetime.fromisoformat(item['created_at'])
+        if isinstance(item.get('sent_at'), str):
+            item['sent_at'] = datetime.fromisoformat(item['sent_at'])
+        if isinstance(item.get('read_at'), str):
+            item['read_at'] = datetime.fromisoformat(item['read_at'])
+        if isinstance(item.get('dismissed_at'), str):
+            item['dismissed_at'] = datetime.fromisoformat(item['dismissed_at'])
+        if isinstance(item.get('expires_at'), str):
+            item['expires_at'] = datetime.fromisoformat(item['expires_at'])
+        return item
 
-    return notification_router
+# Web Push Notification Support
+class WebPushManager:
+    def __init__(self):
+        self.vapid_private_key = os.environ.get('VAPID_PRIVATE_KEY')
+        self.vapid_public_key = os.environ.get('VAPID_PUBLIC_KEY')
+        self.vapid_email = os.environ.get('VAPID_EMAIL', 'mithaasdelightsofficial@gmail.com')
+    
+    async def send_push_notification(
+        self, 
+        subscription_info: dict, 
+        notification_data: dict
+    ) -> bool:
+        """Send web push notification to user's device"""
+        try:
+            # This is a placeholder for web push implementation
+            # In production, you would use pywebpush library
+            logger.info(f"Would send push notification: {notification_data}")
+            return True
+        except Exception as e:
+            logger.error(f"Error sending push notification: {str(e)}")
+            return False
+    
+    def get_vapid_public_key(self) -> str:
+        """Get VAPID public key for frontend registration"""
+        # Generate a dummy key for now - in production use real VAPID keys
+        return "BKxlOhP6uVRl7jzZNUCdU7o4L_2_Tv3K4h8VQ9vFJ1C3m2_JB8NZ5X6R9zQ4M_8fG"
