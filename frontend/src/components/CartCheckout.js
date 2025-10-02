@@ -197,6 +197,7 @@ const CartItem = ({ item, updateQuantity, removeFromCart }) => {
 // Checkout Form Component
 const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
   const { user, isAuthenticated } = useAuth();
+  const [authModalOpen, setAuthModalOpen] = useState(false);
   const [currentStep, setCurrentStep] = useState(1);
   const [formData, setFormData] = useState({
     // Customer Details
@@ -269,48 +270,53 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
     }
   };
 
-  // Calculate delivery charge
+  // Calculate delivery charge using actual backend API
   const calculateDelivery = async () => {
     if (formData.deliveryType === 'pickup') {
       setDeliveryCharge(0);
+      setCustomerCoordinates(null);
+      toast.success('Pickup selected - No delivery charge');
       return;
     }
 
-    if (!formData.pincode || formData.pincode.length < 6) {
+    if (!formData.pincode || formData.pincode.length !== 6) {
       return;
     }
 
     try {
-      // Try to geocode the pincode/address
-      // For now, using approximate coordinates based on pincode
-      // In production, this would call geocoding API
-      let lat = 22.7196;
-      let lon = 75.8577;
+      // Call backend delivery calculation API
+      const response = await axios.post(`${API}/delivery/calculate`, {
+        pincode: formData.pincode,
+        address: `${formData.address}, ${formData.city}, ${formData.state}`,
+        order_amount: totalAmount,
+        delivery_type: formData.deliveryType
+      });
 
-      // Store coordinates for order submission
-      setCustomerCoordinates({ lat, lon });
-
-      // Mock delivery calculation for demo
-      // Real implementation would calculate based on distance
-      const distance = 5; // km (mock value)
-      let charge = 0;
+      const deliveryInfo = response.data;
       
-      if (totalAmount >= 1500 && distance <= 10) {
-        charge = 0;
-      } else if (distance <= 10) {
-        charge = 50;
-      } else if (distance <= 20) {
-        charge = 100;
-      } else {
-        charge = 150;
+      // Store coordinates
+      if (deliveryInfo.customer_lat && deliveryInfo.customer_lon) {
+        setCustomerCoordinates({
+          lat: deliveryInfo.customer_lat,
+          lon: deliveryInfo.customer_lon
+        });
       }
 
-      setDeliveryCharge(charge);
-      if (charge === 0) {
-        toast.success('Congratulations! You qualify for FREE delivery');
+      setDeliveryCharge(deliveryInfo.delivery_charge || 0);
+      
+      if (deliveryInfo.error) {
+        toast.error(deliveryInfo.error);
+      } else if (deliveryInfo.delivery_charge === 0 && deliveryInfo.is_free_delivery) {
+        toast.success(deliveryInfo.message || 'Congratulations! You qualify for FREE delivery');
+      } else if (deliveryInfo.delivery_charge > 0) {
+        toast.info(`Delivery charge: ₹${deliveryInfo.delivery_charge} (${deliveryInfo.distance_km}km at ₹19/km)`);
       }
     } catch (error) {
       console.error('Delivery calculation error:', error);
+      // Fallback to estimated delivery charge
+      const estimatedCharge = 95; // Approximate for Indore city
+      setDeliveryCharge(estimatedCharge);
+      toast.warning(`Using estimated delivery charge: ₹${estimatedCharge}`);
     }
   };
 
@@ -412,6 +418,27 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
 
   return (
     <div>
+      {/* Authentication Check */}
+      {!isAuthenticated && (
+        <div className="text-center py-12">
+          <User className="w-16 h-16 mx-auto text-orange-500 mb-4" />
+          <h2 className="text-2xl font-bold text-gray-900 mb-4">Login Required</h2>
+          <p className="text-gray-600 mb-6">
+            Please login or create an account to complete your purchase.
+          </p>
+          <Button 
+            onClick={() => {
+              toast.info('Please login from the header to continue');
+            }}
+            className="bg-orange-500 hover:bg-orange-600"
+          >
+            Close & Login
+          </Button>
+        </div>
+      )}
+
+      {isAuthenticated && (
+      <>
       <DialogHeader>
         <DialogTitle>Checkout</DialogTitle>
       </DialogHeader>
@@ -807,6 +834,8 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
           </Card>
         </div>
       </div>
+      </>
+      )}
     </div>
   );
 };

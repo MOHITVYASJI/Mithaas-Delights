@@ -2069,6 +2069,7 @@ async def init_sample_data():
 @api_router.post("/delivery/calculate")
 async def calculate_delivery(
     pincode: Optional[str] = None,
+    address: Optional[str] = None,
     latitude: Optional[float] = None,
     longitude: Optional[float] = None,
     order_amount: float = 0,
@@ -2086,7 +2087,7 @@ async def calculate_delivery(
             else:
                 raise HTTPException(
                     status_code=400,
-                    detail="Please provide either pincode or latitude/longitude"
+                    detail="Please provide either pincode/address or latitude/longitude"
                 )
         
         # Calculate delivery charges

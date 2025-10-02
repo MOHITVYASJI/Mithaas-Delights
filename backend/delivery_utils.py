@@ -1,21 +1,22 @@
 """
 Delivery calculation utilities using Haversine formula for distance calculation
 Shop location: 22.738152, 75.831858 (Indore, Madhya Pradesh)
+Geocoding: Using OpenStreetMap Nominatim API (free service)
 """
 import math
-from typing import Tuple, Dict
+import requests
+import time
+from typing import Tuple, Dict, Optional
 
 # Shop location coordinates (Indore)
 SHOP_LAT = 22.738152
 SHOP_LON = 75.831858
 
-# Delivery pricing configuration
+# Delivery pricing configuration (Admin can modify via settings)
 FREE_DELIVERY_MIN_AMOUNT = 1500
 FREE_DELIVERY_MAX_DISTANCE_KM = 10
-BASE_DELIVERY_CHARGE_0_10KM = 50
-BASE_DELIVERY_CHARGE_10_20KM = 100
-BASE_DELIVERY_CHARGE_20_30KM = 150
-BASE_DELIVERY_CHARGE_ABOVE_30KM = 200
+PRICE_PER_KM_BEYOND_FREE = 19  # ₹19 per km beyond free delivery zone
+MAX_DELIVERY_DISTANCE_KM = 50  # Currently limited to Indore city (expandable)
 
 
 def haversine_distance(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
@@ -89,58 +90,107 @@ def calculate_delivery_charge(
             "message": f"Free delivery (Order ≥ ₹{FREE_DELIVERY_MIN_AMOUNT} & Distance ≤ {FREE_DELIVERY_MAX_DISTANCE_KM}km)"
         }
     
-    # Calculate delivery charge based on distance
-    if distance <= 10:
-        delivery_charge = BASE_DELIVERY_CHARGE_0_10KM if order_amount < FREE_DELIVERY_MIN_AMOUNT else 0
-    elif distance <= 20:
-        delivery_charge = BASE_DELIVERY_CHARGE_10_20KM
-    elif distance <= 30:
-        delivery_charge = BASE_DELIVERY_CHARGE_20_30KM
-    else:
-        delivery_charge = BASE_DELIVERY_CHARGE_ABOVE_30KM
+    # Check if distance exceeds maximum delivery range
+    if distance > MAX_DELIVERY_DISTANCE_KM:
+        return {
+            "distance_km": distance,
+            "delivery_charge": 0,
+            "is_free_delivery": False,
+            "delivery_type": "delivery",
+            "error": f"Sorry, we currently deliver only within {MAX_DELIVERY_DISTANCE_KM}km (Indore city area)",
+            "message": "Out of delivery range"
+        }
     
-    is_free = delivery_charge == 0
+    # Calculate delivery charge: ₹19 per km beyond free delivery zone
+    if distance <= FREE_DELIVERY_MAX_DISTANCE_KM:
+        # Within free delivery zone but amount is less than minimum
+        delivery_charge = PRICE_PER_KM_BEYOND_FREE * distance
+    else:
+        # Beyond free delivery zone
+        delivery_charge = PRICE_PER_KM_BEYOND_FREE * distance
+    
+    # Round delivery charge
+    delivery_charge = round(delivery_charge, 2)
     
     return {
         "distance_km": distance,
         "delivery_charge": delivery_charge,
-        "is_free_delivery": is_free,
+        "is_free_delivery": False,
         "delivery_type": "delivery",
-        "message": f"Delivery to {distance}km - ₹{delivery_charge}" if not is_free else "Free delivery"
+        "message": f"Delivery to {distance}km - ₹{delivery_charge}"
     }
 
 
-async def geocode_address(pincode: str = None, address: str = None) -> Tuple[float, float]:
+async def geocode_address(pincode: str = None, address: str = None) -> Optional[Tuple[float, float]]:
     """
-    Geocode address using OpenStreetMap Nominatim API (free, rate-limited)
+    Geocode address using OpenStreetMap Nominatim API (free service)
+    Respects rate limits: max 1 request per second
     
     Args:
         pincode: Indian PIN code
         address: Full address string
     
     Returns:
-        Tuple of (latitude, longitude)
-    
-    Note: This is a placeholder. In production, implement actual geocoding with caching
-    to respect Nominatim's rate limits (1 request/second)
+        Tuple of (latitude, longitude) or None if geocoding fails
     """
-    # For demo purposes, return approximate coordinates based on pincode prefix
-    # In production, use actual Nominatim API with proper rate limiting
-    
-    # This is a simplified demo - map common Indore pincodes
+    try:
+        # Build query for Nominatim
+        query_parts = []
+        if address:
+            query_parts.append(address)
+        if pincode:
+            query_parts.append(pincode)
+        query_parts.append("India")  # Limit to India
+        
+        query = ", ".join(query_parts)
+        
+        # Nominatim API endpoint
+        url = "https://nominatim.openstreetmap.org/search"
+        params = {
+            "q": query,
+            "format": "json",
+            "limit": 1
+        }
+        headers = {
+            "User-Agent": "Mithaas-Delights-App/1.0"  # Required by Nominatim
+        }
+        
+        # Make request (with timeout)
+        response = requests.get(url, params=params, headers=headers, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            if data and len(data) > 0:
+                lat = float(data[0]["lat"])
+                lon = float(data[0]["lon"])
+                
+                # Respect Nominatim rate limit (1 request/second)
+                time.sleep(1)
+                
+                return (lat, lon)
+        
+        # If API fails, fall back to pincode map
+        return fallback_geocode(pincode)
+        
+    except Exception as e:
+        print(f"Geocoding error: {e}")
+        return fallback_geocode(pincode)
+
+
+def fallback_geocode(pincode: str = None) -> Tuple[float, float]:
+    """
+    Fallback geocoding using known pincode prefixes for Indore and nearby areas
+    """
     pincode_map = {
-        "452": (22.7196, 75.8577),  # Indore area
-        "453": (22.7500, 75.8500),  # Indore nearby
-        "400": (19.0760, 72.8777),  # Mumbai
-        "110": (28.7041, 77.1025),  # Delhi
-        "560": (12.9716, 77.5946),  # Bangalore
-        "600": (13.0827, 80.2707),  # Chennai
+        "452": (22.7196, 75.8577),   # Indore area
+        "453": (22.7500, 75.8500),   # Indore nearby
+        "454": (22.6800, 75.9000),   # Indore outskirts
     }
     
-    if pincode:
+    if pincode and len(pincode) >= 3:
         prefix = pincode[:3]
         if prefix in pincode_map:
             return pincode_map[prefix]
     
-    # Default to Indore center if cannot geocode
+    # Default to Indore center
     return (22.7196, 75.8577)
