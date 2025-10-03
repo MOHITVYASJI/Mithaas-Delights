@@ -144,35 +144,79 @@ class CartAddItem(BaseModel):
     variant_weight: str
     quantity: int = 1
 
-# Coupon Model
+# Enhanced Coupon Model with advanced features
+class CouponType(str, Enum):
+    PERCENTAGE = "percentage"
+    FLAT = "flat"
+    BUY_X_GET_Y = "buy_x_get_y"
+    FREE_SHIPPING = "free_shipping"
+    CATEGORY_DISCOUNT = "category_discount"
+
 class Coupon(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     code: str
-    discount_percentage: int = Field(ge=1, le=100)
-    discount_type: str = "percentage"  # "percentage" or "flat"
+    discount_type: CouponType = CouponType.PERCENTAGE
+    
+    # Standard discount fields
+    discount_percentage: Optional[int] = Field(None, ge=1, le=100)
     discount_amount: Optional[float] = None  # For flat discounts
     max_discount_amount: Optional[float] = None
     min_order_amount: float = 0
+    
+    # Product/Category targeting
+    product_ids: List[str] = []  # Specific product IDs
+    category_names: List[str] = []  # Category names for category-wide discounts
+    
+    # Buy X Get Y offer fields
+    buy_quantity: Optional[int] = None  # Buy X items
+    get_quantity: Optional[int] = None  # Get Y items free
+    buy_product_ids: List[str] = []  # Products that qualify for buy condition
+    get_product_ids: List[str] = []  # Products that are free (empty = same as buy products)
+    
+    # Usage and validity
     expiry_date: datetime
     is_active: bool = True
     usage_limit: Optional[int] = None  # Total usage limit
     per_user_limit: Optional[int] = None  # Per user usage limit
     used_count: int = 0
-    product_ids: List[str] = []  # Empty = applies to all products, specific IDs = product-specific
+    
+    # Additional settings
+    stackable: bool = False  # Can be combined with other coupons
+    auto_apply: bool = False  # Automatically apply if conditions met
+    description: Optional[str] = None  # Human readable description
+    
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CouponCreate(BaseModel):
     code: str
-    discount_percentage: int = Field(ge=1, le=100)
-    discount_type: str = "percentage"
+    discount_type: CouponType = CouponType.PERCENTAGE
+    
+    # Standard discount fields
+    discount_percentage: Optional[int] = Field(None, ge=1, le=100)
     discount_amount: Optional[float] = None
     max_discount_amount: Optional[float] = None
     min_order_amount: float = 0
+    
+    # Product/Category targeting
+    product_ids: List[str] = []
+    category_names: List[str] = []
+    
+    # Buy X Get Y offer fields
+    buy_quantity: Optional[int] = None
+    get_quantity: Optional[int] = None
+    buy_product_ids: List[str] = []
+    get_product_ids: List[str] = []
+    
+    # Usage and validity
     expiry_date: datetime
     usage_limit: Optional[int] = None
     per_user_limit: Optional[int] = None
-    product_ids: List[str] = []
+    
+    # Additional settings
+    stackable: bool = False
+    auto_apply: bool = False
+    description: Optional[str] = None
 
 class CouponApply(BaseModel):
     code: str
@@ -1048,7 +1092,7 @@ async def get_coupons(credentials: HTTPAuthorizationCredentials = Security(secur
 
 @api_router.post("/coupons/apply")
 async def apply_coupon(coupon_apply: CouponApply):
-    """Validate and apply coupon with product-specific and per-user limit support"""
+    """Enhanced coupon application with support for multiple coupon types"""
     coupon = await db.coupons.find_one({"code": coupon_apply.code.upper()})
     if not coupon:
         raise HTTPException(status_code=404, detail="Invalid coupon code")
@@ -1067,7 +1111,6 @@ async def apply_coupon(coupon_apply: CouponApply):
     
     # Per-user limit validation
     if coupon_obj.per_user_limit and coupon_apply.user_id:
-        # Check user's usage count for this coupon
         user_usage_count = await db.orders.count_documents({
             "user_id": coupon_apply.user_id,
             "coupon_code": coupon_obj.code
@@ -1078,8 +1121,143 @@ async def apply_coupon(coupon_apply: CouponApply):
                 detail=f"You have already used this coupon {coupon_obj.per_user_limit} times"
             )
     
+    # Get product details for cart items if needed
+    cart_products = {}
+    if coupon_apply.cart_items:
+        product_ids = [item.product_id for item in coupon_apply.cart_items]
+        products = await db.products.find({"id": {"$in": product_ids}}).to_list(length=None)
+        cart_products = {p["id"]: p for p in products}
+    
+    # Handle different coupon types
+    if coupon_obj.discount_type == CouponType.BUY_X_GET_Y:
+        return await apply_buy_x_get_y_coupon(coupon_obj, coupon_apply, cart_products)
+    elif coupon_obj.discount_type == CouponType.CATEGORY_DISCOUNT:
+        return await apply_category_coupon(coupon_obj, coupon_apply, cart_products)
+    elif coupon_obj.discount_type == CouponType.FREE_SHIPPING:
+        return apply_free_shipping_coupon(coupon_obj, coupon_apply)
+    else:
+        return await apply_standard_coupon(coupon_obj, coupon_apply, cart_products)
+
+async def apply_buy_x_get_y_coupon(coupon_obj: Coupon, coupon_apply: CouponApply, cart_products: dict):
+    """Apply Buy X Get Y coupon logic"""
+    if not coupon_obj.buy_quantity or not coupon_obj.get_quantity:
+        raise HTTPException(status_code=400, detail="Invalid Buy X Get Y coupon configuration")
+    
+    if not coupon_apply.cart_items:
+        raise HTTPException(status_code=400, detail="Cart items required for Buy X Get Y coupons")
+    
+    # Find eligible products in cart
+    buy_products = coupon_obj.buy_product_ids if coupon_obj.buy_product_ids else list(cart_products.keys())
+    eligible_items = [item for item in coupon_apply.cart_items if item.product_id in buy_products]
+    
+    if not eligible_items:
+        raise HTTPException(status_code=400, detail="No eligible products found for this offer")
+    
+    # Calculate total quantity of eligible items
+    total_eligible_qty = sum(item.quantity for item in eligible_items)
+    
+    if total_eligible_qty < coupon_obj.buy_quantity:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Buy at least {coupon_obj.buy_quantity} eligible items to get {coupon_obj.get_quantity} free"
+        )
+    
+    # Calculate how many free items they get
+    sets_qualified = total_eligible_qty // coupon_obj.buy_quantity
+    free_items_count = sets_qualified * coupon_obj.get_quantity
+    
+    # Calculate discount (price of cheapest free items)
+    eligible_items_sorted = sorted(eligible_items, key=lambda x: x.price)
+    discount = 0
+    remaining_free = free_items_count
+    
+    for item in eligible_items_sorted:
+        if remaining_free <= 0:
+            break
+        free_qty = min(remaining_free, item.quantity)
+        discount += item.price * free_qty
+        remaining_free -= free_qty
+    
+    return {
+        "valid": True,
+        "discount_type": "buy_x_get_y",
+        "discount_amount": round(discount, 2),
+        "final_amount": round(coupon_apply.order_amount - discount, 2),
+        "buy_quantity": coupon_obj.buy_quantity,
+        "get_quantity": coupon_obj.get_quantity,
+        "free_items_count": free_items_count,
+        "message": f"Buy {coupon_obj.buy_quantity} get {coupon_obj.get_quantity} free applied!"
+    }
+
+async def apply_category_coupon(coupon_obj: Coupon, coupon_apply: CouponApply, cart_products: dict):
+    """Apply category-specific coupon"""
+    if not coupon_obj.category_names:
+        raise HTTPException(status_code=400, detail="No categories specified for this coupon")
+    
+    if not coupon_apply.cart_items:
+        raise HTTPException(status_code=400, detail="Cart items required for category coupons")
+    
+    # Find items in eligible categories
+    eligible_items = []
+    for item in coupon_apply.cart_items:
+        product = cart_products.get(item.product_id)
+        if product and product.get("category") in coupon_obj.category_names:
+            eligible_items.append(item)
+    
+    if not eligible_items:
+        raise HTTPException(
+            status_code=400,
+            detail=f"No items found in eligible categories: {', '.join(coupon_obj.category_names)}"
+        )
+    
+    # Calculate discount on eligible items
+    eligible_amount = sum(item.price * item.quantity for item in eligible_items)
+    
+    if eligible_amount < coupon_obj.min_order_amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum order amount of ₹{coupon_obj.min_order_amount} required for eligible categories"
+        )
+    
+    discount = (eligible_amount * coupon_obj.discount_percentage) / 100
+    
+    if coupon_obj.max_discount_amount:
+        discount = min(discount, coupon_obj.max_discount_amount)
+    
+    return {
+        "valid": True,
+        "discount_type": "category_discount",
+        "discount_percentage": coupon_obj.discount_percentage,
+        "discount_amount": round(discount, 2),
+        "final_amount": round(coupon_apply.order_amount - discount, 2),
+        "eligible_categories": coupon_obj.category_names,
+        "eligible_amount": round(eligible_amount, 2)
+    }
+
+def apply_free_shipping_coupon(coupon_obj: Coupon, coupon_apply: CouponApply):
+    """Apply free shipping coupon"""
+    if coupon_apply.order_amount < coupon_obj.min_order_amount:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Minimum order amount of ₹{coupon_obj.min_order_amount} required for free shipping"
+        )
+    
+    # Assuming standard delivery charge (this should come from delivery calculation)
+    delivery_discount = 50  # Default delivery charge
+    
+    return {
+        "valid": True,
+        "discount_type": "free_shipping",
+        "discount_amount": delivery_discount,
+        "final_amount": coupon_apply.order_amount,  # No change to product amount
+        "delivery_discount": delivery_discount,
+        "message": "Free shipping applied!"
+    }
+
+async def apply_standard_coupon(coupon_obj: Coupon, coupon_apply: CouponApply, cart_products: dict):
+    """Apply standard percentage or flat discount coupon"""
     # Product-specific coupon validation
-    if coupon_obj.product_ids:  # If coupon is product-specific
+    if coupon_obj.product_ids:
         if not coupon_apply.cart_items:
             raise HTTPException(status_code=400, detail="Cart items required for product-specific coupons")
         
@@ -1094,16 +1272,13 @@ async def apply_coupon(coupon_apply: CouponApply):
                 detail="This coupon is not applicable to any items in your cart"
             )
         
-        # Calculate discount only on eligible items
-        eligible_amount = sum(item.price * item.quantity for item in eligible_items)
+        discount_base_amount = sum(item.price * item.quantity for item in eligible_items)
         
-        if eligible_amount < coupon_obj.min_order_amount:
+        if discount_base_amount < coupon_obj.min_order_amount:
             raise HTTPException(
                 status_code=400,
                 detail=f"Minimum order amount of ₹{coupon_obj.min_order_amount} required for eligible products"
             )
-        
-        discount_base_amount = eligible_amount
     else:
         # Global coupon - applies to entire order
         if coupon_apply.order_amount < coupon_obj.min_order_amount:
@@ -1115,10 +1290,9 @@ async def apply_coupon(coupon_apply: CouponApply):
         discount_base_amount = coupon_apply.order_amount
     
     # Calculate discount based on type
-    if coupon_obj.discount_type == "flat" and coupon_obj.discount_amount:
+    if coupon_obj.discount_type == CouponType.FLAT and coupon_obj.discount_amount:
         discount = coupon_obj.discount_amount
     else:
-        # Default to percentage discount
         discount = (discount_base_amount * coupon_obj.discount_percentage) / 100
     
     # Apply maximum discount limit
@@ -1127,8 +1301,8 @@ async def apply_coupon(coupon_apply: CouponApply):
     
     return {
         "valid": True,
-        "discount_type": coupon_obj.discount_type,
-        "discount_percentage": coupon_obj.discount_percentage if coupon_obj.discount_type == "percentage" else None,
+        "discount_type": coupon_obj.discount_type.value,
+        "discount_percentage": coupon_obj.discount_percentage if coupon_obj.discount_type == CouponType.PERCENTAGE else None,
         "discount_amount": round(discount, 2),
         "final_amount": round(coupon_apply.order_amount - discount, 2),
         "applicable_to": "specific_products" if coupon_obj.product_ids else "all_products",
@@ -2165,34 +2339,65 @@ async def delete_media_item(
 
 # ==================== NOTIFICATION SYSTEM ====================
 
+# Enhanced Notification Models
 class Notification(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     message: str
     type: str = "info"  # info, warning, success, error
-    target_audience: str = "all"  # all, users, admin
+    target_audience: str = "all"  # all, users, admin, specific_user
+    target_user_ids: List[str] = []  # For specific user targeting
     is_active: bool = True
+    is_push_enabled: bool = False  # For browser push notifications
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
+    created_by: str  # Admin user ID
 
 class NotificationCreate(BaseModel):
     title: str
     message: str
     type: str = "info"
     target_audience: str = "all"
+    target_user_ids: List[str] = []
+    is_push_enabled: bool = False
     expires_at: Optional[datetime] = None
 
+# User-specific notification tracking
+class UserNotification(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    notification_id: str
+    is_read: bool = False
+    read_at: Optional[datetime] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 @api_router.post("/notifications", response_model=Notification)
 async def create_notification(
     notification: NotificationCreate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
     """Create a notification (Admin only)"""
-    await get_current_admin_user(credentials, db)
+    admin_user = await get_current_admin_user(credentials, db)
     
-    notification_obj = Notification(**notification.dict())
+    notification_dict = notification.dict()
+    notification_dict["created_by"] = admin_user["id"]
+    notification_obj = Notification(**notification_dict)
+    
     await db.notifications.insert_one(prepare_for_mongo(notification_obj.dict()))
-    logger.info(f"Notification created: {notification_obj.id}")
+    
+    # If targeting specific users, create user notification tracking
+    if notification.target_audience == "specific_user" and notification.target_user_ids:
+        user_notifications = []
+        for user_id in notification.target_user_ids:
+            user_notif = UserNotification(
+                user_id=user_id,
+                notification_id=notification_obj.id
+            )
+            user_notifications.append(prepare_for_mongo(user_notif.dict()))
+        
+        if user_notifications:
+            await db.user_notifications.insert_many(user_notifications)
+    
+    logger.info(f"Notification created: {notification_obj.id} by {admin_user['email']}")
     return notification_obj
 
 @api_router.get("/notifications", response_model=List[Notification])
@@ -2211,6 +2416,131 @@ async def get_notifications(active_only: bool = True):
     notifications = await db.notifications.find(filter_query).sort("created_at", -1).to_list(length=None)
     return [Notification(**parse_from_mongo(notif)) for notif in notifications]
 
+@api_router.get("/notifications/my-notifications")
+async def get_my_notifications(
+    limit: int = 50,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get user-specific notifications"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Get notifications targeted to this user or to all users
+    filter_query = {
+        "$and": [
+            {"is_active": True},
+            {
+                "$or": [
+                    {"target_audience": "all"},
+                    {"target_audience": "users"},
+                    {"target_user_ids": current_user["id"]}
+                ]
+            },
+            {
+                "$or": [
+                    {"expires_at": None},
+                    {"expires_at": {"$gt": datetime.now(timezone.utc).isoformat()}}
+                ]
+            }
+        ]
+    }
+    
+    notifications = await db.notifications.find(filter_query).sort("created_at", -1).limit(limit).to_list(length=None)
+    
+    # Get read status for each notification
+    notification_ids = [notif["id"] for notif in notifications]
+    user_notifications = await db.user_notifications.find({
+        "user_id": current_user["id"],
+        "notification_id": {"$in": notification_ids}
+    }).to_list(length=None)
+    
+    read_status = {un["notification_id"]: un for un in user_notifications}
+    
+    # Add read status to notifications
+    for notif in notifications:
+        notif["is_read"] = read_status.get(notif["id"], {}).get("is_read", False)
+        notif["read_at"] = read_status.get(notif["id"], {}).get("read_at")
+    
+    return notifications
+
+@api_router.put("/notifications/{notification_id}/mark-read")
+async def mark_notification_read(
+    notification_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Mark a notification as read for current user"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Check if notification exists
+    notification = await db.notifications.find_one({"id": notification_id})
+    if not notification:
+        raise HTTPException(status_code=404, detail="Notification not found")
+    
+    # Create or update user notification record
+    user_notification = await db.user_notifications.find_one({
+        "user_id": current_user["id"],
+        "notification_id": notification_id
+    })
+    
+    if user_notification:
+        # Update existing record
+        await db.user_notifications.update_one(
+            {"id": user_notification["id"]},
+            {"$set": {
+                "is_read": True,
+                "read_at": datetime.now(timezone.utc).isoformat()
+            }}
+        )
+    else:
+        # Create new record
+        user_notif = UserNotification(
+            user_id=current_user["id"],
+            notification_id=notification_id,
+            is_read=True,
+            read_at=datetime.now(timezone.utc)
+        )
+        await db.user_notifications.insert_one(prepare_for_mongo(user_notif.dict()))
+    
+    return {"message": "Notification marked as read"}
+
+@api_router.put("/notifications/mark-all-read")
+async def mark_all_notifications_read(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Mark all notifications as read for current user"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Get all active notifications for user
+    notifications = await db.notifications.find({
+        "$and": [
+            {"is_active": True},
+            {
+                "$or": [
+                    {"target_audience": "all"},
+                    {"target_audience": "users"},
+                    {"target_user_ids": current_user["id"]}
+                ]
+            }
+        ]
+    }).to_list(length=None)
+    
+    # Mark all as read
+    for notification in notifications:
+        await db.user_notifications.update_one(
+            {
+                "user_id": current_user["id"],
+                "notification_id": notification["id"]
+            },
+            {
+                "$set": {
+                    "is_read": True,
+                    "read_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+    
+    return {"message": f"Marked {len(notifications)} notifications as read"}
+
 @api_router.delete("/notifications/{notification_id}")
 async def delete_notification(
     notification_id: str,
@@ -2219,10 +2549,202 @@ async def delete_notification(
     """Delete a notification (Admin only)"""
     await get_current_admin_user(credentials, db)
     
-    result = await db.notifications.delete_one({"id": notification_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Notification not found")
+    # Delete the notification and all user notification records
+    await db.notifications.delete_one({"id": notification_id})
+    await db.user_notifications.delete_many({"notification_id": notification_id})
+    
     return {"message": "Notification deleted successfully"}
+
+# ==================== THEME SYSTEM ====================
+
+class Theme(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    theme_name: str
+    description: Optional[str] = None
+    primary_color: str = "#f97316"  # Orange
+    secondary_color: str = "#f59e0b"  # Amber
+    accent_color: str = "#ea580c"  # Orange-600
+    background_color: str = "#fff7ed"  # Orange-50
+    text_primary: str = "#1f2937"  # Gray-800
+    text_secondary: str = "#6b7280"  # Gray-500
+    is_active: bool = False
+    is_festival_theme: bool = False
+    festival_name: Optional[str] = None  # "Diwali", "Holi", etc.
+    created_by: str  # Admin user ID
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ThemeCreate(BaseModel):
+    theme_name: str
+    description: Optional[str] = None
+    primary_color: str
+    secondary_color: str
+    accent_color: str
+    background_color: str
+    text_primary: str = "#1f2937"
+    text_secondary: str = "#6b7280"
+    is_festival_theme: bool = False
+    festival_name: Optional[str] = None
+
+@api_router.get("/settings/themes")
+async def get_all_themes():
+    """Get all themes (public endpoint)"""
+    themes = await db.themes.find({"is_active": True}).sort("created_at", -1).to_list(length=None)
+    return [Theme(**parse_from_mongo(theme)) for theme in themes]
+
+@api_router.get("/settings/theme")
+async def get_active_theme():
+    """Get currently active theme"""
+    active_theme = await db.themes.find_one({"is_active": True})
+    if not active_theme:
+        # Return default theme
+        return {
+            "theme_name": "default",
+            "primary_color": "#f97316",
+            "secondary_color": "#f59e0b", 
+            "accent_color": "#ea580c",
+            "background_color": "#fff7ed"
+        }
+    return Theme(**parse_from_mongo(active_theme))
+
+@api_router.post("/settings/themes", response_model=Theme)
+async def create_theme(
+    theme: ThemeCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create a new theme (Admin only)"""
+    admin_user = await get_current_admin_user(credentials, db)
+    
+    # Check if theme name already exists
+    existing = await db.themes.find_one({"theme_name": theme.theme_name})
+    if existing:
+        raise HTTPException(status_code=400, detail="Theme name already exists")
+    
+    theme_dict = theme.dict()
+    theme_dict["created_by"] = admin_user["id"]
+    theme_obj = Theme(**theme_dict)
+    
+    await db.themes.insert_one(prepare_for_mongo(theme_obj.dict()))
+    logger.info(f"Theme created: {theme_obj.theme_name} by {admin_user['email']}")
+    return theme_obj
+
+@api_router.put("/settings/theme/{theme_id}/activate")
+async def activate_theme(
+    theme_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Activate a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Deactivate all themes first
+    await db.themes.update_many({}, {"$set": {"is_active": False}})
+    
+    # Activate selected theme
+    result = await db.themes.update_one(
+        {"id": theme_id},
+        {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    
+    return {"message": "Theme activated successfully"}
+
+@api_router.put("/settings/themes/{theme_id}", response_model=Theme)
+async def update_theme(
+    theme_id: str,
+    theme_update: ThemeCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    theme_dict = theme_update.dict()
+    theme_dict["updated_at"] = datetime.now(timezone.utc)
+    
+    result = await db.themes.update_one(
+        {"id": theme_id},
+        {"$set": prepare_for_mongo(theme_dict)}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    
+    updated_theme = await db.themes.find_one({"id": theme_id})
+    return Theme(**parse_from_mongo(updated_theme))
+
+@api_router.delete("/settings/themes/{theme_id}")
+async def delete_theme(
+    theme_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Check if theme is active
+    theme = await db.themes.find_one({"id": theme_id})
+    if not theme:
+        raise HTTPException(status_code=404, detail="Theme not found")
+    
+    if theme.get("is_active"):
+        raise HTTPException(status_code=400, detail="Cannot delete active theme")
+    
+    await db.themes.delete_one({"id": theme_id})
+    return {"message": "Theme deleted successfully"}
+
+@api_router.post("/settings/themes/init-festival")
+async def init_festival_themes(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Initialize default festival themes (Admin only)"""
+    admin_user = await get_current_admin_user(credentials, db)
+    
+    festival_themes = [
+        {
+            "theme_name": "Diwali Celebration",
+            "description": "Warm golden colors for Diwali festival",
+            "primary_color": "#dc2626",  # Red-600
+            "secondary_color": "#fbbf24",  # Yellow-400
+            "accent_color": "#b91c1c",  # Red-700
+            "background_color": "#fef3c7",  # Yellow-100
+            "is_festival_theme": True,
+            "festival_name": "Diwali",
+            "created_by": admin_user["id"]
+        },
+        {
+            "theme_name": "Holi Colors",
+            "description": "Vibrant colors for Holi celebration",
+            "primary_color": "#ec4899",  # Pink-500
+            "secondary_color": "#8b5cf6",  # Violet-500
+            "accent_color": "#db2777",  # Pink-600
+            "background_color": "#fdf2f8",  # Pink-50
+            "is_festival_theme": True,
+            "festival_name": "Holi",
+            "created_by": admin_user["id"]
+        },
+        {
+            "theme_name": "Raksha Bandhan",
+            "description": "Elegant colors for Raksha Bandhan",
+            "primary_color": "#f59e0b",  # Amber-500
+            "secondary_color": "#ef4444",  # Red-500
+            "accent_color": "#d97706",  # Amber-600
+            "background_color": "#fffbeb",  # Amber-50
+            "is_festival_theme": True,
+            "festival_name": "Raksha Bandhan",
+            "created_by": admin_user["id"]
+        }
+    ]
+    
+    created_themes = []
+    for theme_data in festival_themes:
+        # Check if already exists
+        existing = await db.themes.find_one({"theme_name": theme_data["theme_name"]})
+        if not existing:
+            theme_obj = Theme(**theme_data)
+            await db.themes.insert_one(prepare_for_mongo(theme_obj.dict()))
+            created_themes.append(theme_obj.theme_name)
+    
+    return {"message": f"Initialized {len(created_themes)} festival themes", "created": created_themes}
 
 # ==================== CHATBOT ROUTES ====================
 

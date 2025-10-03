@@ -10,21 +10,22 @@ export const BannerCarousel = () => {
   const [banners, setBanners] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [isAutoRotating, setIsAutoRotating] = useState(true);
 
   useEffect(() => {
     fetchBanners();
   }, []);
 
   useEffect(() => {
-    // Auto-rotate banners every 5 seconds
-    if (banners.length > 1) {
+    // Enhanced Auto-rotate banners every 5 seconds with pause on hover
+    if (banners.length > 1 && isAutoRotating) {
       const interval = setInterval(() => {
         setCurrentIndex((prev) => (prev + 1) % banners.length);
       }, 5000);
 
       return () => clearInterval(interval);
     }
-  }, [banners.length]);
+  }, [banners.length, isAutoRotating]);
 
   const fetchBanners = async () => {
     try {
@@ -53,7 +54,12 @@ export const BannerCarousel = () => {
   const currentBanner = banners[currentIndex];
 
   return (
-    <div className="relative w-full h-64 md:h-96 bg-gradient-to-r from-orange-100 to-amber-100 overflow-hidden rounded-xl shadow-lg mb-8" data-testid="banner-carousel">
+    <div 
+      className="relative w-full h-64 md:h-96 bg-gradient-to-r from-orange-100 to-amber-100 overflow-hidden rounded-xl shadow-lg mb-8" 
+      data-testid="banner-carousel"
+      onMouseEnter={() => setIsAutoRotating(false)}
+      onMouseLeave={() => setIsAutoRotating(true)}
+    >
       {/* Banner Images with transition */}
       <div className="relative w-full h-full">
         {banners.map((banner, index) => (

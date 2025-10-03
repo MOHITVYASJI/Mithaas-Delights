@@ -17,24 +17,33 @@ const API = `${BACKEND_URL}/api`;
 const PREDEFINED_THEMES = {
   default: {
     name: 'Default Orange',
-    primary: '#f97316',
-    secondary: '#f59e0b',
-    accent: '#ea580c',
-    background: '#fff7ed'
+    theme_name: 'default',
+    primary_color: '#f97316',
+    secondary_color: '#f59e0b',
+    accent_color: '#ea580c',
+    background_color: '#fff7ed',
+    text_primary: '#1f2937',
+    text_secondary: '#6b7280'
   },
-  festival: {
-    name: 'Festival (Diwali)',
-    primary: '#dc2626',
-    secondary: '#fbbf24',
-    accent: '#b91c1c',
-    background: '#fef3c7'
+  light: {
+    name: 'Light Mode',
+    theme_name: 'light',
+    primary_color: '#f97316',
+    secondary_color: '#f59e0b',
+    accent_color: '#ea580c',
+    background_color: '#ffffff',
+    text_primary: '#1f2937',
+    text_secondary: '#6b7280'
   },
-  modern: {
-    name: 'Modern Blue',
-    primary: '#3b82f6',
-    secondary: '#60a5fa',
-    accent: '#2563eb',
-    background: '#eff6ff'
+  dark: {
+    name: 'Dark Mode',
+    theme_name: 'dark',
+    primary_color: '#f97316',
+    secondary_color: '#f59e0b',
+    accent_color: '#ea580c',
+    background_color: '#111827',
+    text_primary: '#f9fafb',
+    text_secondary: '#d1d5db'
   }
 };
 
@@ -83,17 +92,21 @@ export const ThemeSwitcher = () => {
       // Pre-defined theme
       const predef = PREDEFINED_THEMES[theme];
       if (predef) {
-        root.style.setProperty('--primary-color', predef.primary);
-        root.style.setProperty('--secondary-color', predef.secondary);
-        root.style.setProperty('--accent-color', predef.accent);
-        root.style.setProperty('--background-color', predef.background);
+        root.style.setProperty('--primary-color', predef.primary_color);
+        root.style.setProperty('--secondary-color', predef.secondary_color);
+        root.style.setProperty('--accent-color', predef.accent_color);
+        root.style.setProperty('--background-color', predef.background_color);
+        root.style.setProperty('--text-primary', predef.text_primary);
+        root.style.setProperty('--text-secondary', predef.text_secondary);
       }
     } else {
       // Custom theme from backend
-      root.style.setProperty('--primary-color', theme.primary_color || PREDEFINED_THEMES.default.primary);
-      root.style.setProperty('--secondary-color', theme.secondary_color || PREDEFINED_THEMES.default.secondary);
-      root.style.setProperty('--accent-color', theme.accent_color || PREDEFINED_THEMES.default.accent);
-      root.style.setProperty('--background-color', theme.background_color || PREDEFINED_THEMES.default.background);
+      root.style.setProperty('--primary-color', theme.primary_color || PREDEFINED_THEMES.default.primary_color);
+      root.style.setProperty('--secondary-color', theme.secondary_color || PREDEFINED_THEMES.default.secondary_color);
+      root.style.setProperty('--accent-color', theme.accent_color || PREDEFINED_THEMES.default.accent_color);
+      root.style.setProperty('--background-color', theme.background_color || PREDEFINED_THEMES.default.background_color);
+      root.style.setProperty('--text-primary', theme.text_primary || PREDEFINED_THEMES.default.text_primary);
+      root.style.setProperty('--text-secondary', theme.text_secondary || PREDEFINED_THEMES.default.text_secondary);
     }
 
     // Save to localStorage
@@ -155,7 +168,7 @@ export const ThemeSwitcher = () => {
             <div className="flex items-center gap-3 w-full">
               <div
                 className="w-6 h-6 rounded-full border-2 border-gray-200"
-                style={{ backgroundColor: theme.primary }}
+                style={{ backgroundColor: theme.primary_color }}
               />
               <span className="flex-1">{theme.name}</span>
               {activeTheme === key && (
