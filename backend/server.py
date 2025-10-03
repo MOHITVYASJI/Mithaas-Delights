@@ -1,5 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Security
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Security, File, UploadFile
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -24,6 +25,7 @@ from auth_utils import (
 )
 from delivery_utils import calculate_delivery_charge, geocode_address
 from razorpay_utils import create_razorpay_order, verify_razorpay_signature, create_refund
+from file_upload_utils import save_base64_image, save_uploaded_file, get_file_size
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -546,17 +548,35 @@ async def update_product(
     """Update a product (Admin only)"""
     await get_current_admin_user(credentials, db)
     
+    # Get old product to check for removed variants
+    old_product = await db.products.find_one({"id": product_id})
+    if not old_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Prepare update
     product_dict = product_update.dict()
     product_dict["id"] = product_id
     product_dict["updated_at"] = datetime.now(timezone.utc)
     
+    # Update product
     result = await db.products.update_one(
         {"id": product_id},
         {"$set": prepare_for_mongo(product_dict)}
     )
     
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Product not found")
+    # Check for removed variants and clean them from carts
+    old_variant_weights = {v["weight"] for v in old_product.get("variants", [])}
+    new_variant_weights = {v.weight for v in product_update.variants}
+    removed_variants = old_variant_weights - new_variant_weights
+    
+    if removed_variants:
+        # Remove cart items with deleted variants
+        for removed_weight in removed_variants:
+            await db.carts.update_many(
+                {"items.product_id": product_id, "items.variant_weight": removed_weight},
+                {"$pull": {"items": {"product_id": product_id, "variant_weight": removed_weight}}}
+            )
+        logger.info(f"Removed variants {removed_variants} from carts for product {product_id}")
     
     updated_product = await db.products.find_one({"id": product_id})
     return Product(**parse_from_mongo(updated_product))
@@ -740,6 +760,95 @@ async def clear_cart(credentials: HTTPAuthorizationCredentials = Security(securi
     
     return {"message": "Cart cleared"}
 
+@api_router.post("/cart/merge")
+async def merge_cart(
+    guest_cart_items: List[CartItemModel],
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Merge guest cart with user cart on login"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Get or create user cart
+    cart = await db.carts.find_one({"user_id": current_user["id"]})
+    if not cart:
+        cart = Cart(user_id=current_user["id"])
+        cart_dict = prepare_for_mongo(cart.dict())
+        await db.carts.insert_one(cart_dict)
+        cart = cart_dict
+    
+    cart_items = cart.get("items", [])
+    
+    # Merge guest cart items
+    for guest_item in guest_cart_items:
+        # Check if item already exists (by product_id AND variant_weight)
+        item_exists = False
+        for cart_item in cart_items:
+            if (cart_item["product_id"] == guest_item.product_id and 
+                cart_item["variant_weight"] == guest_item.variant_weight):
+                # Update quantity
+                cart_item["quantity"] += guest_item.quantity
+                item_exists = True
+                break
+        
+        if not item_exists:
+            # Add new item
+            cart_items.append(guest_item.dict())
+    
+    # Update cart
+    await db.carts.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {
+            "items": cart_items,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {"message": "Cart merged successfully", "cart_items": len(cart_items)}
+
+@api_router.post("/cart/validate")
+async def validate_cart(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Validate cart and remove invalid items (deleted products/variants)"""
+    current_user = await get_current_user(credentials, db)
+    
+    cart = await db.carts.find_one({"user_id": current_user["id"]})
+    if not cart:
+        return {"message": "Cart is empty", "removed_items": []}
+    
+    cart_items = cart.get("items", [])
+    valid_items = []
+    removed_items = []
+    
+    for item in cart_items:
+        # Check if product exists
+        product = await db.products.find_one({"id": item["product_id"]})
+        if not product:
+            removed_items.append(item)
+            continue
+        
+        # Check if variant exists
+        product_obj = Product(**parse_from_mongo(product))
+        variant_exists = any(v.weight == item["variant_weight"] for v in product_obj.variants)
+        
+        if variant_exists:
+            valid_items.append(item)
+        else:
+            removed_items.append(item)
+    
+    # Update cart with valid items only
+    await db.carts.update_one(
+        {"user_id": current_user["id"]},
+        {"$set": {
+            "items": valid_items,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    return {
+        "message": f"Cart validated. Removed {len(removed_items)} invalid items.",
+        "removed_items": removed_items,
+        "valid_items_count": len(valid_items)
+    }
+
 # ==================== COUPON ROUTES ====================
 
 @api_router.post("/coupons", response_model=Coupon)
@@ -872,6 +981,27 @@ async def update_banner(
     updated_banner = await db.banners.find_one({"id": banner_id})
     return Banner(**parse_from_mongo(updated_banner))
 
+@api_router.put("/banners/{banner_id}/toggle")
+async def toggle_banner(
+    banner_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Toggle banner active status (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    banner = await db.banners.find_one({"id": banner_id})
+    if not banner:
+        raise HTTPException(status_code=404, detail="Banner not found")
+    
+    new_status = not banner.get("is_active", True)
+    
+    result = await db.banners.update_one(
+        {"id": banner_id},
+        {"$set": {"is_active": new_status, "updated_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    
+    return {"message": f"Banner {'activated' if new_status else 'deactivated'}", "is_active": new_status}
+
 @api_router.delete("/banners/{banner_id}")
 async def delete_banner(
     banner_id: str,
@@ -884,6 +1014,53 @@ async def delete_banner(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Banner not found")
     return {"message": "Banner deleted successfully"}
+
+# ==================== DELIVERY ROUTES ====================
+
+class DeliveryCalculateRequest(BaseModel):
+    pincode: str
+    address: Optional[str] = None
+    order_amount: float
+    delivery_type: str = "delivery"
+
+@api_router.post("/delivery/calculate")
+async def calculate_delivery(delivery_req: DeliveryCalculateRequest):
+    """Calculate delivery charge based on address/pincode and order amount"""
+    try:
+        # Geocode the address
+        coords = await geocode_address(pincode=delivery_req.pincode, address=delivery_req.address)
+        
+        if not coords:
+            raise HTTPException(
+                status_code=400,
+                detail="Unable to geocode address. Please check pincode and try again."
+            )
+        
+        customer_lat, customer_lon = coords
+        
+        # Calculate delivery charge
+        delivery_info = calculate_delivery_charge(
+            customer_lat=customer_lat,
+            customer_lon=customer_lon,
+            order_amount=delivery_req.order_amount,
+            delivery_type=delivery_req.delivery_type
+        )
+        
+        # Add coordinates to response
+        delivery_info["customer_lat"] = customer_lat
+        delivery_info["customer_lon"] = customer_lon
+        delivery_info["pincode"] = delivery_req.pincode
+        
+        return delivery_info
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        logger.error(f"Delivery calculation error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail="Error calculating delivery charge. Please try again."
+        )
 
 # ==================== ORDER ROUTES ====================
 
@@ -1488,6 +1665,14 @@ async def get_all_reviews(credentials: HTTPAuthorizationCredentials = Security(s
     await get_current_admin_user(credentials, db)
     
     reviews = await db.reviews.find().to_list(length=None)
+    return [Review(**parse_from_mongo(review)) for review in reviews]
+
+@api_router.get("/reviews/pending/all", response_model=List[Review])
+async def get_pending_reviews(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get pending reviews for approval (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    reviews = await db.reviews.find({"is_approved": False}).sort("created_at", -1).to_list(length=None)
     return [Review(**parse_from_mongo(review)) for review in reviews]
 
 @api_router.put("/reviews/{review_id}/approve")
@@ -2186,6 +2371,83 @@ async def delete_media(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Media item not found")
     return {"message": "Media item deleted successfully"}
+
+# ==================== FILE UPLOAD ROUTES ====================
+
+class Base64ImageUpload(BaseModel):
+    image_data: str  # base64 encoded image
+    category: str = "media"  # "media", "reviews", "products"
+
+@api_router.post("/upload/base64")
+async def upload_base64_image(
+    upload_data: Base64ImageUpload,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Upload base64 encoded image"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Validate file size (approximately 5MB for base64)
+    base64_size = len(upload_data.image_data)
+    if base64_size > 7000000:  # ~5MB base64 = ~7MB string
+        raise HTTPException(status_code=400, detail="Image size exceeds 5MB limit")
+    
+    # Save image
+    file_url = save_base64_image(upload_data.image_data, upload_data.category)
+    
+    if not file_url:
+        raise HTTPException(status_code=500, detail="Failed to save image")
+    
+    return {"url": file_url, "message": "Image uploaded successfully"}
+
+@api_router.post("/upload/file")
+async def upload_file(
+    file: UploadFile = File(...),
+    category: str = "media",
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Upload file (image/video) - Max 5MB"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Read file data
+    file_data = await file.read()
+    
+    # Validate file size (5MB)
+    if len(file_data) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File size exceeds 5MB limit")
+    
+    # Validate file type
+    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm"]
+    if file.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"File type {file.content_type} not allowed. Allowed: images (jpg, png, gif, webp) and videos (mp4, webm)"
+        )
+    
+    # Save file
+    file_url = save_uploaded_file(file_data, file.filename, category)
+    
+    if not file_url:
+        raise HTTPException(status_code=500, detail="Failed to save file")
+    
+    return {
+        "url": file_url,
+        "filename": file.filename,
+        "content_type": file.content_type,
+        "size": len(file_data),
+        "message": "File uploaded successfully"
+    }
+
+# Serve uploaded files
+@api_router.get("/uploads/{category}/{filename}")
+async def serve_upload(category: str, filename: str):
+    """Serve uploaded files"""
+    from file_upload_utils import UPLOAD_DIR
+    file_path = UPLOAD_DIR / category / filename
+    
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="File not found")
+    
+    return FileResponse(file_path)
 
 # ==================== ORDER TRACKING ROUTES ====================
 
