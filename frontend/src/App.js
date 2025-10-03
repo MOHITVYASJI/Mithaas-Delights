@@ -1282,8 +1282,11 @@ const ProfilePage = () => {
                           <div key={order.id} className="border rounded-lg p-4 bg-white shadow-sm">
                             <div className="flex justify-between items-start mb-3">
                               <div>
-                                <p className="font-semibold text-lg">Order #{order.id.slice(0, 8)}</p>
-                                <p className="text-sm text-gray-600">
+                                <p className="text-xs text-gray-500 mb-1">Order ID</p>
+                                <code className="font-mono text-sm bg-gray-100 px-2 py-1 rounded" data-testid="order-id-display">
+                                  {order.id}
+                                </code>
+                                <p className="text-sm text-gray-600 mt-2">
                                   Placed on {new Date(order.created_at).toLocaleString()}
                                 </p>
                               </div>

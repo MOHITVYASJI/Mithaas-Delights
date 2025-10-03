@@ -113,15 +113,20 @@ export const OrderTrackingPage = () => {
             {/* Current Status Card */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Order #{trackingData.order_id.substring(0, 8)}</span>
-                  <Badge className={`${statusColors[trackingData.status]} text-white`}>
+                <CardTitle className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <div className="text-sm text-gray-500 mb-1">Order ID</div>
+                    <code className="text-lg font-mono bg-gray-100 px-3 py-1 rounded" data-testid="full-order-id">
+                      {trackingData.order_id}
+                    </code>
+                  </div>
+                  <Badge className={`${statusColors[trackingData.status]} text-white self-start sm:self-auto`}>
                     {trackingData.status.replace('_', ' ').toUpperCase()}
                   </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid md:grid-cols-2 gap-4 mb-6">
                   <div>
                     <p className="text-sm text-gray-600">Order Date</p>
                     <p className="font-medium">{formatDate(trackingData.created_at)}</p>
@@ -131,10 +136,18 @@ export const OrderTrackingPage = () => {
                     <p className="font-medium">{formatDate(trackingData.updated_at)}</p>
                   </div>
                   <div>
+                    <p className="text-sm text-gray-600">Payment Method</p>
+                    <p className="font-medium capitalize">{trackingData.payment_method || 'N/A'}</p>
+                  </div>
+                  <div>
                     <p className="text-sm text-gray-600">Payment Status</p>
                     <Badge variant={trackingData.payment_status === 'completed' ? 'success' : 'secondary'}>
                       {trackingData.payment_status}
                     </Badge>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Total Amount</p>
+                    <p className="font-bold text-lg text-orange-600">₹{trackingData.total_amount}</p>
                   </div>
                   {trackingData.estimated_delivery && (
                     <div>
@@ -143,6 +156,26 @@ export const OrderTrackingPage = () => {
                     </div>
                   )}
                 </div>
+
+                {/* Order Items */}
+                {trackingData.items && trackingData.items.length > 0 && (
+                  <div className="border-t pt-4">
+                    <h3 className="font-semibold text-gray-900 mb-3">Order Items</h3>
+                    <div className="space-y-3">
+                      {trackingData.items.map((item, index) => (
+                        <div key={index} className="flex justify-between items-start bg-gray-50 p-3 rounded-lg" data-testid="order-item">
+                          <div className="flex-1">
+                            <p className="font-medium text-gray-900">{item.product_name}</p>
+                            <p className="text-sm text-gray-600">
+                              Weight: {item.variant_weight} | Quantity: {item.quantity}
+                            </p>
+                          </div>
+                          <p className="font-semibold text-gray-900">₹{item.price * item.quantity}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
 

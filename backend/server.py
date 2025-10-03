@@ -1895,13 +1895,16 @@ async def approve_review(
     
     result = await db.reviews.update_one(
         {"id": review_id},
-        {"$set": {"is_approved": True}}
+        {"$set": {
+            "is_approved": True,
+            "updated_at": datetime.now(timezone.utc)
+        }}
     )
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Review not found")
     
-    return {"message": "Review approved"}
+    return {"message": "Review approved", "success": True}
 
 @api_router.delete("/reviews/{review_id}")
 async def delete_review(
@@ -2390,21 +2393,21 @@ async def init_sample_data():
             "is_featured": True,
             "is_sold_out": False
         },
-        {
-            "name": "Besan Laddu",
-            "description": "Traditional gram flour balls sweetened with jaggery and enriched with ghee",
-            "category": "laddu",
-            "variants": [
-                {"weight": "250g", "price": 299, "is_available": True},
-                {"weight": "500g", "price": 549, "is_available": True},
-                {"weight": "1kg", "price": 999, "is_available": True}
-            ],
-            "image_url": "https://th.bing.com/th/id/OIP.0ZB3XubESFclOtXe3qJYxwHaHa?w=179&h=180&c=7&r=0&o=7&pid=1.7",
-            "media_gallery": ["https://th.bing.com/th/id/OIP.0ZB3XubESFclOtXe3qJYxwHaHa?w=179&h=180&c=7&r=0&o=7&pid=1.7"],
-            "ingredients": ["Gram Flour", "Jaggery", "Ghee", "Cashews", "Raisins"],
-            "is_featured": True,
-            "is_sold_out": False
-        },
+        # {
+        #     "name": "Besan Laddu",
+        #     "description": "Traditional gram flour balls sweetened with jaggery and enriched with ghee",
+        #     "category": "laddu",
+        #     "variants": [
+        #         {"weight": "250g", "price": 299, "is_available": True},
+        #         {"weight": "500g", "price": 549, "is_available": True},
+        #         {"weight": "1kg", "price": 999, "is_available": True}
+        #     ],
+        #     "image_url": "https://th.bing.com/th/id/OIP.0ZB3XubESFclOtXe3qJYxwHaHa?w=179&h=180&c=7&r=0&o=7&pid=1.7",
+        #     "media_gallery": ["https://th.bing.com/th/id/OIP.0ZB3XubESFclOtXe3qJYxwHaHa?w=179&h=180&c=7&r=0&o=7&pid=1.7"],
+        #     "ingredients": ["Gram Flour", "Jaggery", "Ghee", "Cashews", "Raisins"],
+        #     "is_featured": True,
+        #     "is_sold_out": False
+        # },
         {
             "name": "Masala Mixture",
             "description": "Crispy blend of lentils, nuts, and spices - perfect tea-time snack",
@@ -2431,7 +2434,7 @@ async def init_sample_data():
             "media_gallery": ["https://th.bing.com/th/id/OIP.ibmTOU1t-Zl1LKlZUOAewgHaHa?w=225&h=180&c=7&r=0&o=7&pid=1.7"],
             "ingredients": ["Cottage Cheese", "Sugar", "Cardamom"],
             "is_featured": True,
-            "is_sold_out": False
+            "is_sold_out": True
         },
         {
             "name": "Dry Fruit Barfi",
@@ -2736,6 +2739,43 @@ async def update_order_stock_status(
     
     logger.info(f"Order {order_id} status updated to {status.value}")
     return {"message": "Order status updated successfully", "new_status": status.value}
+
+@api_router.put("/orders/{order_id}/update-payment")
+async def update_order_payment(
+    order_id: str,
+    payment_method: Optional[str] = None,
+    payment_status: Optional[PaymentStatus] = None,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update order payment method and/or status (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Get current order
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if payment_method:
+        update_fields["payment_method"] = payment_method
+    
+    if payment_status:
+        update_fields["payment_status"] = payment_status.value
+    
+    # Update order
+    result = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": update_fields}
+    )
+    
+    logger.info(f"Order {order_id} payment updated: method={payment_method}, status={payment_status}")
+    return {
+        "message": "Order payment updated successfully", 
+        "payment_method": payment_method,
+        "payment_status": payment_status.value if payment_status else None
+    }
+
 
 # ==================== NOTIFICATION SYSTEM ====================
 

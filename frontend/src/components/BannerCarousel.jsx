@@ -13,14 +13,17 @@ export const BannerCarousel = () => {
 
   useEffect(() => {
     fetchBanners();
-    // Auto-rotate banners every 5 seconds
-    const interval = setInterval(() => {
-      if (banners.length > 0) {
-        setCurrentIndex((prev) => (prev + 1) % banners.length);
-      }
-    }, 5000);
+  }, []);
 
-    return () => clearInterval(interval);
+  useEffect(() => {
+    // Auto-rotate banners every 5 seconds
+    if (banners.length > 1) {
+      const interval = setInterval(() => {
+        setCurrentIndex((prev) => (prev + 1) % banners.length);
+      }, 5000);
+
+      return () => clearInterval(interval);
+    }
   }, [banners.length]);
 
   const fetchBanners = async () => {

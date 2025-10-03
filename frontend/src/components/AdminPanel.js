@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Edit, Trash2, Eye, Package, Users, BarChart, Settings, Star, Check, X, MessageSquare, Palette } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Package, Users, BarChart, Settings, Star, Check, X, MessageSquare, Palette, Play } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -109,7 +109,7 @@ export const AdminPanel = () => {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 gap-2">
             <TabsTrigger value="dashboard" data-testid="dashboard-tab">
               <BarChart className="w-4 h-4 mr-2" />
               Dashboard
@@ -122,6 +122,10 @@ export const AdminPanel = () => {
               <Eye className="w-4 h-4 mr-2" />
               Orders
             </TabsTrigger>
+            <TabsTrigger value="bulk-orders" data-testid="bulk-orders-tab">
+              <Package className="w-4 h-4 mr-2" />
+              Bulk Orders
+            </TabsTrigger>
             <TabsTrigger value="users" data-testid="users-tab">
               <Users className="w-4 h-4 mr-2" />
               Users
@@ -129,6 +133,10 @@ export const AdminPanel = () => {
             <TabsTrigger value="reviews" data-testid="reviews-tab">
               <MessageSquare className="w-4 h-4 mr-2" />
               Reviews
+            </TabsTrigger>
+            <TabsTrigger value="media" data-testid="media-tab">
+              <Palette className="w-4 h-4 mr-2" />
+              Media
             </TabsTrigger>
             <TabsTrigger value="settings" data-testid="settings-tab">
               <Settings className="w-4 h-4 mr-2" />
@@ -148,12 +156,20 @@ export const AdminPanel = () => {
             <OrderManagement orders={orders} fetchOrders={fetchOrders} />
           </TabsContent>
 
+          <TabsContent value="bulk-orders">
+            <BulkOrderManagement />
+          </TabsContent>
+
           <TabsContent value="users">
             <UserManagement users={users} fetchUsers={fetchUsers} />
           </TabsContent>
 
           <TabsContent value="reviews">
             <ReviewManagement reviews={reviews} fetchReviews={fetchReviews} />
+          </TabsContent>
+
+          <TabsContent value="media">
+            <MediaGalleryManagement />
           </TabsContent>
 
           <TabsContent value="settings">
@@ -684,6 +700,33 @@ const OrderManagement = ({ orders, fetchOrders }) => {
       toast.error('Failed to update order status');
     }
   };
+  const updatePaymentMethod = async (orderId, paymentMethod) => {
+    try {
+      await axios.put(
+        `${API}/orders/${orderId}/update-payment`, 
+        { payment_method: paymentMethod },
+        { headers: getAuthHeaders() }
+      );
+      toast.success('Payment method updated successfully');
+      fetchOrders();
+    } catch (error) {
+      toast.error('Failed to update payment method');
+    }
+  };
+
+  const updatePaymentStatus = async (orderId, paymentStatus) => {
+    try {
+      await axios.put(
+        `${API}/orders/${orderId}/update-payment`, 
+        { payment_status: paymentStatus },
+        { headers: getAuthHeaders() }
+      );
+      toast.success('Payment status updated successfully');
+      fetchOrders();
+    } catch (error) {
+      toast.error('Failed to update payment status');
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -695,8 +738,14 @@ const OrderManagement = ({ orders, fetchOrders }) => {
             <CardContent className="p-6">
               <div className="flex items-center justify-between mb-4">
                 <div>
-                  <h3 className="text-lg font-semibold">Order #{order.id.slice(0, 8)}</h3>
-                  <p className="text-gray-600">{order.email} • {order.phone_number}</p>
+                  <p className="text-xs text-gray-500 mb-1">Order ID</p>
+                  <code className="font-mono text-sm bg-gray-100 px-2 py-1 rounded" data-testid="admin-order-id">
+                    {order.id}
+                  </code>
+                  <p className="text-gray-600 mt-2 text-sm">{order.email} • {order.phone_number}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Placed: {new Date(order.created_at).toLocaleString()}
+                  </p>
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-orange-600">₹{order.final_amount || order.total_amount}</p>
@@ -723,14 +772,14 @@ const OrderManagement = ({ orders, fetchOrders }) => {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <span className="text-sm text-gray-600">Status:</span>
+              <div className="grid md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Order Status:</p>
                   <Select 
                     value={order.status} 
                     onValueChange={(value) => updateOrderStatus(order.id, value)}
                   >
-                    <SelectTrigger className="w-48" data-testid="order-status-select">
+                    <SelectTrigger className="w-full" data-testid="order-status-select">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -743,13 +792,46 @@ const OrderManagement = ({ orders, fetchOrders }) => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <Badge className="capitalize">
-                    {order.payment_status}
-                  </Badge>
+                
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Payment Method:</p>
+                  <Select 
+                    value={order.payment_method} 
+                    onValueChange={(value) => updatePaymentMethod(order.id, value)}
+                  >
+                    <SelectTrigger className="w-full" data-testid="payment-method-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cod">Cash on Delivery</SelectItem>
+                      <SelectItem value="razorpay">Online Payment</SelectItem>
+                      <SelectItem value="upi">UPI</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600 mb-2">Payment Status:</p>
+                  <Select 
+                    value={order.payment_status} 
+                    onValueChange={(value) => updatePaymentStatus(order.id, value)}
+                  >
+                    <SelectTrigger className="w-full" data-testid="payment-status-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="failed">Failed</SelectItem>
+                      <SelectItem value="refunded">Refunded</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex items-end">
                   <Badge 
                     variant={order.status === 'delivered' ? 'default' : 'secondary'}
-                    className="capitalize"
+                    className="capitalize px-4 py-2 text-sm"
                   >
                     {order.status.replace('_', ' ')}
                   </Badge>
@@ -2249,6 +2331,363 @@ const SettingsManagement = () => {
           </Card>
         </TabsContent>
       </Tabs>
+    </div>
+  );
+};
+
+// Bulk Order Management Component
+const BulkOrderManagement = () => {
+  const [bulkOrders, setBulkOrders] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchBulkOrders();
+  }, []);
+
+  const fetchBulkOrders = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/bulk-orders`, {
+        headers: getAuthHeaders()
+      });
+      setBulkOrders(response.data);
+    } catch (error) {
+      console.error('Error fetching bulk orders:', error);
+      toast.error('Failed to fetch bulk orders');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const updateBulkOrderStatus = async (orderId, status) => {
+    try {
+      await axios.put(`${API}/bulk-orders/${orderId}`, 
+        { status },
+        { headers: getAuthHeaders() }
+      );
+      toast.success('Bulk order status updated successfully');
+      fetchBulkOrders();
+    } catch (error) {
+      toast.error('Failed to update bulk order status');
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Bulk Order Requests</h2>
+        <Badge variant="outline" className="text-lg px-4 py-2">
+          {bulkOrders.length} Total Requests
+        </Badge>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+        </div>
+      ) : bulkOrders.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <Package className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No bulk orders found</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="space-y-4">
+          {bulkOrders.map((order) => (
+            <Card key={order.id} data-testid="bulk-order-card">
+              <CardContent className="p-6">
+                <div className="grid md:grid-cols-2 gap-6">
+                  <div>
+                    <h3 className="font-semibold text-lg text-gray-900 mb-4">{order.company_name}</h3>
+                    
+                    <div className="space-y-2 text-sm">
+                      <div className="flex items-start">
+                        <Users className="w-4 h-4 mr-2 mt-0.5 text-gray-500" />
+                        <div>
+                          <p className="font-medium">{order.contact_person}</p>
+                          <p className="text-gray-600">{order.email}</p>
+                          <p className="text-gray-600">{order.phone}</p>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start">
+                        <Package className="w-4 h-4 mr-2 mt-0.5 text-gray-500" />
+                        <div>
+                          <p className="font-medium">Product Details:</p>
+                          <p className="text-gray-700">{order.product_details}</p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <p className="text-gray-600">Quantity:</p>
+                          <p className="font-medium">{order.quantity}</p>
+                        </div>
+                        {order.preferred_date && (
+                          <div>
+                            <p className="text-gray-600">Preferred Date:</p>
+                            <p className="font-medium">{new Date(order.preferred_date).toLocaleDateString()}</p>
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="flex items-start">
+                        <span className="text-gray-600 mr-2">Address:</span>
+                        <p className="text-gray-700">{order.delivery_address}</p>
+                      </div>
+
+                      <div className="text-xs text-gray-500">
+                        Submitted: {new Date(order.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="border-l pl-6">
+                    <div className="mb-4">
+                      <label className="text-sm text-gray-600 mb-2 block">Order Status:</label>
+                      <Select 
+                        value={order.status} 
+                        onValueChange={(value) => updateBulkOrderStatus(order.id, value)}
+                      >
+                        <SelectTrigger className="w-full" data-testid="bulk-order-status-select">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="quoted">Quoted</SelectItem>
+                          <SelectItem value="confirmed">Confirmed</SelectItem>
+                          <SelectItem value="in_progress">In Progress</SelectItem>
+                          <SelectItem value="completed">Completed</SelectItem>
+                          <SelectItem value="cancelled">Cancelled</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
+                    <div className="space-y-2">
+                      <a
+                        href={`mailto:${order.email}?subject=Bulk Order Inquiry - ${order.company_name}`}
+                        className="block w-full text-center px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 transition-colors text-sm"
+                      >
+                        Send Email
+                      </a>
+                      <a
+                        href={`tel:${order.phone}`}
+                        className="block w-full text-center px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600 transition-colors text-sm"
+                      >
+                        Call Customer
+                      </a>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Media Gallery Management Component
+const MediaGalleryManagement = () => {
+  const [mediaItems, setMediaItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [newMedia, setNewMedia] = useState({
+    title: '',
+    description: '',
+    media_url: '',
+    media_type: 'image',
+    thumbnail_url: ''
+  });
+
+  useEffect(() => {
+    fetchMediaItems();
+  }, []);
+
+  const fetchMediaItems = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/media`);
+      setMediaItems(response.data);
+    } catch (error) {
+      console.error('Error fetching media items:', error);
+      toast.error('Failed to fetch media items');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAddMedia = async (e) => {
+    e.preventDefault();
+    try {
+      await axios.post(`${API}/media`, newMedia, {
+        headers: getAuthHeaders()
+      });
+      toast.success('Media item added successfully');
+      setIsAddDialogOpen(false);
+      setNewMedia({ title: '', description: '', media_url: '', media_type: 'image', thumbnail_url: '' });
+      fetchMediaItems();
+    } catch (error) {
+      console.error('Error adding media:', error);
+      toast.error('Failed to add media item');
+    }
+  };
+
+  const handleDeleteMedia = async (mediaId) => {
+    if (window.confirm('Are you sure you want to delete this media item?')) {
+      try {
+        await axios.delete(`${API}/media/${mediaId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Media item deleted successfully');
+        fetchMediaItems();
+      } catch (error) {
+        toast.error('Failed to delete media item');
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Media Gallery Management</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-orange-500 hover:bg-orange-600" data-testid="add-media-button">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Media Item
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Add New Media Item</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleAddMedia} className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium mb-2">Title *</label>
+                <Input
+                  value={newMedia.title}
+                  onChange={(e) => setNewMedia({ ...newMedia, title: e.target.value })}
+                  placeholder="e.g., Kaju Katli Special"
+                  required
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Description</label>
+                <Input
+                  value={newMedia.description}
+                  onChange={(e) => setNewMedia({ ...newMedia, description: e.target.value })}
+                  placeholder="Brief description"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Media Type *</label>
+                <Select value={newMedia.media_type} onValueChange={(value) => setNewMedia({ ...newMedia, media_type: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="video">Video</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium mb-2">Media URL *</label>
+                <Input
+                  type="url"
+                  value={newMedia.media_url}
+                  onChange={(e) => setNewMedia({ ...newMedia, media_url: e.target.value })}
+                  placeholder="https://example.com/image.jpg"
+                  required
+                />
+              </div>
+
+              {newMedia.media_type === 'video' && (
+                <div>
+                  <label className="block text-sm font-medium mb-2">Thumbnail URL</label>
+                  <Input
+                    type="url"
+                    value={newMedia.thumbnail_url}
+                    onChange={(e) => setNewMedia({ ...newMedia, thumbnail_url: e.target.value })}
+                    placeholder="https://example.com/thumbnail.jpg"
+                  />
+                </div>
+              )}
+
+              <Button type="submit" className="w-full bg-orange-500 hover:bg-orange-600">
+                Add Media Item
+              </Button>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-12">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto"></div>
+        </div>
+      ) : mediaItems.length === 0 ? (
+        <Card>
+          <CardContent className="text-center py-12">
+            <Palette className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+            <p className="text-gray-500">No media items found</p>
+            <p className="text-sm text-gray-400 mt-2">Add your first media item to get started</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {mediaItems.map((item) => (
+            <Card key={item.id} data-testid="media-item-card">
+              <div className="relative aspect-video overflow-hidden">
+                {item.media_type === 'image' ? (
+                  <img
+                    src={item.media_url}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="relative w-full h-full bg-gray-200">
+                    <video
+                      src={item.media_url}
+                      className="w-full h-full object-cover"
+                      poster={item.thumbnail_url}
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-30">
+                      <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center">
+                        <Play className="w-6 h-6 text-orange-500" />
+                      </div>
+                    </div>
+                  </div>
+                )}
+                <Badge className="absolute top-2 right-2">
+                  {item.media_type}
+                </Badge>
+              </div>
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-gray-900 mb-1">{item.title}</h3>
+                {item.description && (
+                  <p className="text-sm text-gray-600 mb-3">{item.description}</p>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleDeleteMedia(item.id)}
+                  className="w-full"
+                >
+                  <Trash2 className="w-4 h-4 mr-2" />
+                  Delete
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
