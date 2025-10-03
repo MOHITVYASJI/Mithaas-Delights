@@ -149,25 +149,36 @@ class Coupon(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     code: str
     discount_percentage: int = Field(ge=1, le=100)
+    discount_type: str = "percentage"  # "percentage" or "flat"
+    discount_amount: Optional[float] = None  # For flat discounts
     max_discount_amount: Optional[float] = None
     min_order_amount: float = 0
     expiry_date: datetime
     is_active: bool = True
-    usage_limit: Optional[int] = None
+    usage_limit: Optional[int] = None  # Total usage limit
+    per_user_limit: Optional[int] = None  # Per user usage limit
     used_count: int = 0
+    product_ids: List[str] = []  # Empty = applies to all products, specific IDs = product-specific
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class CouponCreate(BaseModel):
     code: str
     discount_percentage: int = Field(ge=1, le=100)
+    discount_type: str = "percentage"
+    discount_amount: Optional[float] = None
     max_discount_amount: Optional[float] = None
     min_order_amount: float = 0
     expiry_date: datetime
     usage_limit: Optional[int] = None
+    per_user_limit: Optional[int] = None
+    product_ids: List[str] = []
 
 class CouponApply(BaseModel):
     code: str
     order_amount: float
+    cart_items: List['CartItem'] = []  # For product-specific validation
+    user_id: Optional[str] = None  # For per-user limit validation
 
 # Festival Banner Model
 class Banner(BaseModel):
@@ -602,6 +613,153 @@ async def delete_product(
     logger.info(f"Product {product_id} deleted and removed from all carts")
     return {"message": "Product deleted successfully and removed from carts"}
 
+# ==================== CATEGORY MANAGEMENT ROUTES ====================
+
+# Dynamic Category Model
+class Category(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    name: str
+    description: Optional[str] = None
+    display_order: int = 0
+    is_active: bool = True
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CategoryCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    display_order: int = 0
+
+class CategoryUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    display_order: Optional[int] = None
+    is_active: Optional[bool] = None
+
+@api_router.get("/categories", response_model=List[Category])
+async def get_categories(active_only: bool = True):
+    """Get all categories"""
+    filter_query = {}
+    if active_only:
+        filter_query["is_active"] = True
+    
+    categories = await db.categories.find(filter_query).sort("display_order", 1).to_list(length=None)
+    return [Category(**parse_from_mongo(cat)) for cat in categories]
+
+@api_router.post("/categories", response_model=Category)
+async def create_category(
+    category: CategoryCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create a new category (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Check if category name already exists
+    existing = await db.categories.find_one({"name": {"$regex": f"^{category.name}$", "$options": "i"}})
+    if existing:
+        raise HTTPException(status_code=400, detail="Category name already exists")
+    
+    category_dict = category.dict()
+    category_obj = Category(**category_dict)
+    await db.categories.insert_one(prepare_for_mongo(category_obj.dict()))
+    return category_obj
+
+@api_router.put("/categories/{category_id}", response_model=Category)
+async def update_category(
+    category_id: str,
+    category_update: CategoryUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update a category (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Check if category exists
+    category = await db.categories.find_one({"id": category_id})
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Check if new name conflicts (if name is being updated)
+    if category_update.name and category_update.name != category["name"]:
+        existing = await db.categories.find_one({
+            "name": {"$regex": f"^{category_update.name}$", "$options": "i"},
+            "id": {"$ne": category_id}
+        })
+        if existing:
+            raise HTTPException(status_code=400, detail="Category name already exists")
+    
+    # Prepare update
+    update_data = {k: v for k, v in category_update.dict().items() if v is not None}
+    update_data["updated_at"] = datetime.now(timezone.utc)
+    
+    # Update category
+    await db.categories.update_one(
+        {"id": category_id},
+        {"$set": prepare_for_mongo(update_data)}
+    )
+    
+    updated_category = await db.categories.find_one({"id": category_id})
+    return Category(**parse_from_mongo(updated_category))
+
+@api_router.delete("/categories/{category_id}")
+async def delete_category(
+    category_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete a category (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Check if category exists
+    category = await db.categories.find_one({"id": category_id})
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Check if category is being used by products
+    products_using_category = await db.products.count_documents({"category": category["name"]})
+    if products_using_category > 0:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot delete category. {products_using_category} products are using this category."
+        )
+    
+    # Delete category
+    result = await db.categories.delete_one({"id": category_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    return {"message": "Category deleted successfully"}
+
+@api_router.post("/categories/init-default")
+async def init_default_categories(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Initialize default categories from enum (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    # Check if categories already exist
+    existing_count = await db.categories.count_documents({})
+    if existing_count > 0:
+        raise HTTPException(status_code=400, detail="Categories already initialized")
+    
+    # Create default categories from ProductCategory enum
+    default_categories = [
+        {"name": "mithai", "description": "Traditional Indian sweets", "display_order": 1},
+        {"name": "namkeen", "description": "Savory snacks and treats", "display_order": 2},
+        {"name": "farsan", "description": "Gujarati farsan specialties", "display_order": 3},
+        {"name": "bengali_sweets", "description": "Bengali sweet delicacies", "display_order": 4},
+        {"name": "dry_fruit_sweets", "description": "Premium dry fruit sweets", "display_order": 5},
+        {"name": "laddu", "description": "Various types of laddus", "display_order": 6},
+        {"name": "festival_special", "description": "Special festival items", "display_order": 7}
+    ]
+    
+    categories_to_insert = []
+    for cat_data in default_categories:
+        category = Category(**cat_data)
+        categories_to_insert.append(prepare_for_mongo(category.dict()))
+    
+    await db.categories.insert_many(categories_to_insert)
+    
+    return {"message": f"Initialized {len(categories_to_insert)} default categories"}
+
 # ==================== CART ROUTES ====================
 
 @api_router.get("/cart")
@@ -880,14 +1038,14 @@ async def get_coupons(credentials: HTTPAuthorizationCredentials = Security(secur
 
 @api_router.post("/coupons/apply")
 async def apply_coupon(coupon_apply: CouponApply):
-    """Validate and apply coupon"""
+    """Validate and apply coupon with product-specific and per-user limit support"""
     coupon = await db.coupons.find_one({"code": coupon_apply.code.upper()})
     if not coupon:
         raise HTTPException(status_code=404, detail="Invalid coupon code")
     
     coupon_obj = Coupon(**parse_from_mongo(coupon))
     
-    # Validate coupon
+    # Basic coupon validation
     if not coupon_obj.is_active:
         raise HTTPException(status_code=400, detail="Coupon is inactive")
     
@@ -897,22 +1055,74 @@ async def apply_coupon(coupon_apply: CouponApply):
     if coupon_obj.usage_limit and coupon_obj.used_count >= coupon_obj.usage_limit:
         raise HTTPException(status_code=400, detail="Coupon usage limit reached")
     
-    if coupon_apply.order_amount < coupon_obj.min_order_amount:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Minimum order amount of ₹{coupon_obj.min_order_amount} required"
-        )
+    # Per-user limit validation
+    if coupon_obj.per_user_limit and coupon_apply.user_id:
+        # Check user's usage count for this coupon
+        user_usage_count = await db.orders.count_documents({
+            "user_id": coupon_apply.user_id,
+            "coupon_code": coupon_obj.code
+        })
+        if user_usage_count >= coupon_obj.per_user_limit:
+            raise HTTPException(
+                status_code=400,
+                detail=f"You have already used this coupon {coupon_obj.per_user_limit} times"
+            )
     
-    # Calculate discount
-    discount = (coupon_apply.order_amount * coupon_obj.discount_percentage) / 100
+    # Product-specific coupon validation
+    if coupon_obj.product_ids:  # If coupon is product-specific
+        if not coupon_apply.cart_items:
+            raise HTTPException(status_code=400, detail="Cart items required for product-specific coupons")
+        
+        eligible_items = [
+            item for item in coupon_apply.cart_items 
+            if item.product_id in coupon_obj.product_ids
+        ]
+        
+        if not eligible_items:
+            raise HTTPException(
+                status_code=400,
+                detail="This coupon is not applicable to any items in your cart"
+            )
+        
+        # Calculate discount only on eligible items
+        eligible_amount = sum(item.price * item.quantity for item in eligible_items)
+        
+        if eligible_amount < coupon_obj.min_order_amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum order amount of ₹{coupon_obj.min_order_amount} required for eligible products"
+            )
+        
+        discount_base_amount = eligible_amount
+    else:
+        # Global coupon - applies to entire order
+        if coupon_apply.order_amount < coupon_obj.min_order_amount:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Minimum order amount of ₹{coupon_obj.min_order_amount} required"
+            )
+        
+        discount_base_amount = coupon_apply.order_amount
+    
+    # Calculate discount based on type
+    if coupon_obj.discount_type == "flat" and coupon_obj.discount_amount:
+        discount = coupon_obj.discount_amount
+    else:
+        # Default to percentage discount
+        discount = (discount_base_amount * coupon_obj.discount_percentage) / 100
+    
+    # Apply maximum discount limit
     if coupon_obj.max_discount_amount:
         discount = min(discount, coupon_obj.max_discount_amount)
     
     return {
         "valid": True,
-        "discount_percentage": coupon_obj.discount_percentage,
+        "discount_type": coupon_obj.discount_type,
+        "discount_percentage": coupon_obj.discount_percentage if coupon_obj.discount_type == "percentage" else None,
         "discount_amount": round(discount, 2),
-        "final_amount": round(coupon_apply.order_amount - discount, 2)
+        "final_amount": round(coupon_apply.order_amount - discount, 2),
+        "applicable_to": "specific_products" if coupon_obj.product_ids else "all_products",
+        "eligible_product_ids": coupon_obj.product_ids if coupon_obj.product_ids else None
     }
 
 @api_router.delete("/coupons/{coupon_id}")
