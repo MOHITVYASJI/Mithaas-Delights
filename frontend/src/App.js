@@ -194,6 +194,8 @@ const Header = () => {
           <nav className="hidden md:flex items-center space-x-6">
             <a href="/" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
             <a href="/#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
+            <a href="/bulk-orders" className="text-gray-700 hover:text-orange-600 transition-colors">Bulk Orders</a>
+            <a href="/gallery" className="text-gray-700 hover:text-orange-600 transition-colors">Gallery</a>
             <a href="/#about" className="text-gray-700 hover:text-orange-600 transition-colors">About</a>
             <a href="/#contact" className="text-gray-700 hover:text-orange-600 transition-colors">Contact</a>
           </nav>
@@ -357,6 +359,8 @@ const Header = () => {
             <div className="flex flex-col space-y-3">
               <a href="#home" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
               <a href="#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
+              <a href="/bulk-orders" className="text-gray-700 hover:text-orange-600 transition-colors">Bulk Orders</a>
+              <a href="/gallery" className="text-gray-700 hover:text-orange-600 transition-colors">Gallery</a>
               <a href="#about" className="text-gray-700 hover:text-orange-600 transition-colors">About</a>
               <a href="#contact" className="text-gray-700 hover:text-orange-600 transition-colors">Contact</a>
               {!isAuthenticated && (

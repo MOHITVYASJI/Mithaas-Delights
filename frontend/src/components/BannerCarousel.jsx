@@ -54,12 +54,19 @@ export const BannerCarousel = () => {
 
   return (
     <div className="relative w-full h-64 md:h-96 bg-gradient-to-r from-orange-100 to-amber-100 overflow-hidden rounded-xl shadow-lg mb-8" data-testid="banner-carousel">
-      {/* Banner Image */}
-      <img
-        src={currentBanner.image_url}
-        alt={currentBanner.title}
-        className="w-full h-full object-cover"
-      />
+      {/* Banner Images with transition */}
+      <div className="relative w-full h-full">
+        {banners.map((banner, index) => (
+          <img
+            key={banner.id}
+            src={banner.image_url}
+            alt={banner.title}
+            className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${
+              index === currentIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'
+            }`}
+          />
+        ))}
+      </div>
       
       {/* Overlay Content */}
       <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-transparent flex items-end">

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Security, File, UploadFile
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, Security, File, UploadFile, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
@@ -285,11 +285,9 @@ class Review(BaseModel):
 
 class ReviewCreate(BaseModel):
     product_id: str
-    user_id: str
-    user_name: str
     rating: int = Field(ge=1, le=5)
     comment: str
-    images: List[str] = []  # Photo URLs
+    images: List[str] = []
 
 # Media Gallery Models
 class MediaItem(BaseModel):
@@ -542,13 +540,25 @@ async def create_product(
     product: ProductCreate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Create a new product (Admin only)"""
+    """Create a new product (Admin only) - FIXED: Prevents duplicates"""
     await get_current_admin_user(credentials, db)
+    
+    # Check if product with same name already exists
+    existing_product = await db.products.find_one({"name": product.name})
+    if existing_product:
+        raise HTTPException(status_code=400, detail="Product with this name already exists")
     
     product_dict = product.dict()
     product_obj = Product(**product_dict)
-    await db.products.insert_one(prepare_for_mongo(product_obj.dict()))
-    return product_obj
+    
+    try:
+        # Insert with unique constraint check
+        await db.products.insert_one(prepare_for_mongo(product_obj.dict()))
+        logger.info(f"Product created successfully: {product_obj.id} - {product_obj.name}")
+        return product_obj
+    except Exception as e:
+        logger.error(f"Error creating product: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to create product")
 
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(
@@ -1375,6 +1385,55 @@ async def update_order_status(
     
     return {"message": "Order status updated successfully"}
 
+# ==================== PHASE 1 FIX: Payment Status Update ====================
+
+class OrderPaymentUpdate(BaseModel):
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+
+@api_router.put("/orders/{order_id}/update-payment")
+async def update_order_payment(
+    order_id: str,
+    update_data: OrderPaymentUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update order payment method and/or status (Admin only) - FIXED"""
+    await get_current_admin_user(credentials, db)
+    
+    # Get current order
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
+    
+    if update_data.payment_method:
+        update_fields["payment_method"] = update_data.payment_method
+    
+    if update_data.payment_status:
+        # Validate payment status
+        valid_statuses = ["pending", "completed", "failed", "refunded"]
+        if update_data.payment_status not in valid_statuses:
+            raise HTTPException(status_code=400, detail=f"Invalid payment status. Must be one of: {valid_statuses}")
+        update_fields["payment_status"] = update_data.payment_status
+    
+    # Update order
+    result = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": update_fields}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    logger.info(f"Order {order_id} payment updated: method={update_data.payment_method}, status={update_data.payment_status}")
+    return {
+        "message": "Order payment updated successfully",
+        "success": True,
+        "payment_method": update_data.payment_method,
+        "payment_status": update_data.payment_status
+    }
+
 # ==================== RAZORPAY ROUTES ====================
 
 @api_router.post("/razorpay/create-order")
@@ -1775,98 +1834,47 @@ async def delete_user(
     result = await db.users.delete_one({"id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
-    
     return {"message": "User deleted successfully"}
 
-# ==================== WISHLIST ROUTES ====================
-
-@api_router.post("/wishlist/add/{product_id}")
-async def add_to_wishlist(
-    product_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Add product to wishlist"""
-    current_user = await get_current_user(credentials, db)
-    
-    # Check if product exists
-    product = await db.products.find_one({"id": product_id})
-    if not product:
-        raise HTTPException(status_code=404, detail="Product not found")
-    
-    # Add to wishlist
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$addToSet": {"wishlist": product_id}}
-    )
-    
-    return {"message": "Product added to wishlist"}
-
-@api_router.delete("/wishlist/remove/{product_id}")
-async def remove_from_wishlist(
-    product_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Remove product from wishlist"""
-    current_user = await get_current_user(credentials, db)
-    
-    await db.users.update_one(
-        {"id": current_user["id"]},
-        {"$pull": {"wishlist": product_id}}
-    )
-    
-    return {"message": "Product removed from wishlist"}
-
-@api_router.get("/wishlist", response_model=List[Product])
-async def get_wishlist(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Get user's wishlist products"""
-    current_user = await get_current_user(credentials, db)
-    
-    wishlist_ids = current_user.get("wishlist", [])
-    if not wishlist_ids:
-        return []
-    
-    products = await db.products.find({"id": {"$in": wishlist_ids}}).to_list(length=None)
-    return [Product(**parse_from_mongo(product)) for product in products]
-
-# ==================== REVIEW ROUTES ====================
+# ==================== PHASE 1 FIX: REVIEW ROUTES ====================
 
 @api_router.post("/reviews", response_model=Review)
 async def create_review(
     review: ReviewCreate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Create a new review"""
+    """Create a review (requires authentication) - User must be logged in"""
     current_user = await get_current_user(credentials, db)
     
+    # Verify product exists
+    product = await db.products.find_one({"id": review.product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Create review object with user info
     review_dict = review.dict()
     review_dict["user_id"] = current_user["id"]
+    review_dict["user_name"] = current_user["name"]
     review_obj = Review(**review_dict)
+    
+    # Insert review
     await db.reviews.insert_one(prepare_for_mongo(review_obj.dict()))
     
-    # Update product rating
-    product = await db.products.find_one({"id": review.product_id})
-    if product:
-        # Calculate new average rating
-        reviews = await db.reviews.find({"product_id": review.product_id, "is_approved": True}).to_list(length=None)
-        if reviews:
-            avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
-            await db.products.update_one(
-                {"id": review.product_id},
-                {"$set": {"rating": round(avg_rating, 1), "review_count": len(reviews)}}
-            )
-    
+    logger.info(f"Review created for product {review.product_id} by user {current_user['id']}")
     return review_obj
 
 @api_router.get("/reviews/{product_id}", response_model=List[Review])
 async def get_product_reviews(product_id: str, include_pending: bool = False):
-    """Get reviews for a product"""
+    """Get reviews for a product - FIXED: Only approved reviews visible to users"""
     filter_query = {"product_id": product_id}
     
-    # Only show approved reviews to regular users
+    # Only show approved reviews to regular users (include_pending used by admin)
     if not include_pending:
         filter_query["is_approved"] = True
     
-    reviews = await db.reviews.find(filter_query).to_list(length=None)
+    reviews = await db.reviews.find(filter_query).sort("created_at", -1).to_list(length=None)
+    
+    logger.info(f"Fetching reviews for product {product_id}, found {len(reviews)} approved reviews")
     return [Review(**parse_from_mongo(review)) for review in reviews]
 
 @api_router.get("/reviews", response_model=List[Review])
@@ -1874,7 +1882,7 @@ async def get_all_reviews(credentials: HTTPAuthorizationCredentials = Security(s
     """Get all reviews (Admin only)"""
     await get_current_admin_user(credentials, db)
     
-    reviews = await db.reviews.find().to_list(length=None)
+    reviews = await db.reviews.find().sort("created_at", -1).to_list(length=None)
     return [Review(**parse_from_mongo(review)) for review in reviews]
 
 @api_router.get("/reviews/pending/all", response_model=List[Review])
@@ -1890,21 +1898,45 @@ async def approve_review(
     review_id: str,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Approve a review (Admin only)"""
+    """Approve a review (Admin only) - FIXED: Ensures review is marked as approved"""
     await get_current_admin_user(credentials, db)
     
+    # Check if review exists
+    review = await db.reviews.find_one({"id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    # Update review to approved
     result = await db.reviews.update_one(
         {"id": review_id},
         {"$set": {
             "is_approved": True,
-            "updated_at": datetime.now(timezone.utc)
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }}
     )
     
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Review not found")
     
-    return {"message": "Review approved", "success": True}
+    # Update product review count and rating
+    product_id = review["product_id"]
+    all_approved_reviews = await db.reviews.find({
+        "product_id": product_id,
+        "is_approved": True
+    }).to_list(length=None)
+    
+    if all_approved_reviews:
+        avg_rating = sum(r["rating"] for r in all_approved_reviews) / len(all_approved_reviews)
+        await db.products.update_one(
+            {"id": product_id},
+            {"$set": {
+                "rating": round(avg_rating, 1),
+                "review_count": len(all_approved_reviews)
+            }}
+        )
+    
+    logger.info(f"Review {review_id} approved successfully for product {product_id}")
+    return {"message": "Review approved successfully", "success": True}
 
 @api_router.delete("/reviews/{review_id}")
 async def delete_review(
@@ -1914,602 +1946,122 @@ async def delete_review(
     """Delete a review (Admin only)"""
     await get_current_admin_user(credentials, db)
     
+    review = await db.reviews.find_one({"id": review_id})
+    if not review:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
     result = await db.reviews.delete_one({"id": review_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Review not found")
+    
+    # Update product review count
+    product_id = review["product_id"]
+    all_approved_reviews = await db.reviews.find({
+        "product_id": product_id,
+        "is_approved": True
+    }).to_list(length=None)
+    
+    if all_approved_reviews:
+        avg_rating = sum(r["rating"] for r in all_approved_reviews) / len(all_approved_reviews)
+        await db.products.update_one(
+            {"id": product_id},
+            {"$set": {
+                "rating": round(avg_rating, 1),
+                "review_count": len(all_approved_reviews)
+            }}
+        )
+    else:
+        await db.products.update_one(
+            {"id": product_id},
+            {"$set": {
+                "rating": 4.5,
+                "review_count": 0
+            }}
+        )
+    
     return {"message": "Review deleted successfully"}
-
-class ReviewUpdate(BaseModel):
-    rating: Optional[int] = Field(None, ge=1, le=5)
-    comment: Optional[str] = None
-    is_approved: Optional[bool] = None
 
 @api_router.put("/reviews/{review_id}")
 async def update_review(
     review_id: str,
-    review_update: ReviewUpdate,
+    review_data: dict,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
     """Update a review (Admin only)"""
     await get_current_admin_user(credentials, db)
     
-    # Get current review
-    review = await db.reviews.find_one({"id": review_id})
-    if not review:
-        raise HTTPException(status_code=404, detail="Review not found")
+    update_data = {k: v for k, v in review_data.items() if k in ['comment', 'rating', 'is_approved']}
+    update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
-    # Build update dict
-    update_dict = {}
-    if review_update.rating is not None:
-        update_dict["rating"] = review_update.rating
-    if review_update.comment is not None:
-        update_dict["comment"] = review_update.comment
-    if review_update.is_approved is not None:
-        update_dict["is_approved"] = review_update.is_approved
-    
-    if update_dict:
-        await db.reviews.update_one(
-            {"id": review_id},
-            {"$set": update_dict}
-        )
-        
-        # Recalculate product rating if rating changed
-        if "rating" in update_dict or "is_approved" in update_dict:
-            product = await db.products.find_one({"id": review["product_id"]})
-            if product:
-                reviews = await db.reviews.find({"product_id": review["product_id"], "is_approved": True}).to_list(length=None)
-                if reviews:
-                    avg_rating = sum(r["rating"] for r in reviews) / len(reviews)
-                    await db.products.update_one(
-                        {"id": review["product_id"]},
-                        {"$set": {"rating": round(avg_rating, 1), "review_count": len(reviews)}}
-                    )
-    
-    updated_review = await db.reviews.find_one({"id": review_id})
-    return Review(**parse_from_mongo(updated_review))
-
-# ==================== THEME/SETTINGS MANAGEMENT ====================
-
-class ThemeSettings(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    theme_name: str
-    primary_color: str = "#f97316"  # orange-500
-    secondary_color: str = "#f59e0b"  # amber-500
-    accent_color: str = "#ea580c"  # orange-600
-    festival_mode: bool = False
-    festival_theme: Optional[str] = None  # "diwali", "holi", "christmas" etc.
-    hero_image_url: Optional[str] = None
-    logo_url: Optional[str] = None
-    is_active: bool = True
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ThemeSettingsCreate(BaseModel):
-    theme_name: str
-    primary_color: str = "#f97316"
-    secondary_color: str = "#f59e0b"
-    accent_color: str = "#ea580c"
-    festival_mode: bool = False
-    festival_theme: Optional[str] = None
-    hero_image_url: Optional[str] = None
-    logo_url: Optional[str] = None
-
-@api_router.get("/settings/theme")
-async def get_active_theme():
-    """Get active theme settings"""
-    theme = await db.theme_settings.find_one({"is_active": True})
-    if not theme:
-        # Return default theme
-        default_theme = ThemeSettings(
-            theme_name="Default",
-            primary_color="#f97316",
-            secondary_color="#f59e0b",
-            accent_color="#ea580c"
-        )
-        return default_theme
-    return ThemeSettings(**parse_from_mongo(theme))
-
-@api_router.get("/settings/themes")
-async def get_all_themes(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Get all theme settings (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    themes = await db.theme_settings.find().to_list(length=None)
-    return [ThemeSettings(**parse_from_mongo(theme)) for theme in themes]
-
-@api_router.post("/settings/theme", response_model=ThemeSettings)
-async def create_theme(
-    theme: ThemeSettingsCreate,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Create a new theme (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    theme_obj = ThemeSettings(**theme.dict())
-    await db.theme_settings.insert_one(prepare_for_mongo(theme_obj.dict()))
-    return theme_obj
-
-@api_router.put("/settings/theme/{theme_id}")
-async def update_theme(
-    theme_id: str,
-    theme_update: ThemeSettingsCreate,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Update a theme (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    theme_dict = theme_update.dict()
-    theme_dict["updated_at"] = datetime.now(timezone.utc)
-    
-    result = await db.theme_settings.update_one(
-        {"id": theme_id},
-        {"$set": prepare_for_mongo(theme_dict)}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Theme not found")
-    
-    updated_theme = await db.theme_settings.find_one({"id": theme_id})
-    return ThemeSettings(**parse_from_mongo(updated_theme))
-
-@api_router.put("/settings/theme/{theme_id}/activate")
-async def activate_theme(
-    theme_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Activate a theme (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    # Deactivate all themes
-    await db.theme_settings.update_many({}, {"$set": {"is_active": False}})
-    
-    # Activate selected theme
-    result = await db.theme_settings.update_one(
-        {"id": theme_id},
-        {"$set": {"is_active": True, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Theme not found")
-    
-    return {"message": "Theme activated successfully"}
-
-@api_router.delete("/settings/theme/{theme_id}")
-async def delete_theme(
-    theme_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Delete a theme (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    result = await db.theme_settings.delete_one({"id": theme_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Theme not found")
-    return {"message": "Theme deleted successfully"}
-
-# ==================== CHATBOT ROUTES ====================
-
-# Contact Form Model
-class ContactMessage(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    name: str
-    email: EmailStr
-    subject: str
-    message: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    is_read: bool = False
-
-class ContactMessageCreate(BaseModel):
-    name: str
-    email: EmailStr
-    subject: str
-    message: str
-
-@api_router.post("/contact")
-async def submit_contact_form(contact_data: ContactMessageCreate):
-    """Submit contact form message"""
-    try:
-        contact_message = ContactMessage(**contact_data.dict())
-        await db.contact_messages.insert_one(prepare_for_mongo(contact_message.dict()))
-        
-        return {
-            "success": True,
-            "message": "Thank you for contacting us! We will get back to you soon.",
-            "id": contact_message.id
-        }
-    except Exception as e:
-        logger.error(f"Contact form error: {str(e)}")
-        raise HTTPException(status_code=500, detail="Failed to submit contact form")
-
-@api_router.get("/contact/messages")
-async def get_contact_messages(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Get all contact messages (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    messages = await db.contact_messages.find().sort("created_at", -1).to_list(length=None)
-    return [ContactMessage(**parse_from_mongo(msg)) for msg in messages]
-
-@api_router.put("/orders/{order_id}/cancel")
-async def cancel_order(
-    order_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Cancel order (within 1 hour for users, anytime for admin) with refund support"""
-    current_user = await get_current_user(credentials, db)
-    
-    # Get order
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    # Check ownership or admin
-    is_admin = current_user.get("role") == "admin"
-    is_owner = order["user_id"] == current_user["id"]
-    
-    if not (is_admin or is_owner):
-        raise HTTPException(status_code=403, detail="Not authorized to cancel this order")
-    
-    # Check if already cancelled or delivered
-    if order["status"] in ["cancelled", "delivered"]:
-        raise HTTPException(status_code=400, detail=f"Cannot cancel order with status: {order['status']}")
-    
-    # Check 1-hour window for regular users
-    if not is_admin:
-        order_time = datetime.fromisoformat(order["created_at"]) if isinstance(order["created_at"], str) else order["created_at"]
-        time_elapsed = datetime.now(timezone.utc) - order_time
-        
-        if time_elapsed > timedelta(hours=1):
-            raise HTTPException(
-                status_code=400,
-                detail="Order can only be cancelled within 1 hour of placement. Please contact admin for assistance."
-            )
-    
-    # Add cancellation to status history
-    status_history = order.get("status_history", [])
-    status_history.append({
-        "status": OrderStatus.CANCELLED.value,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "note": "Order cancelled by " + ("admin" if is_admin else "customer")
-    })
-    
-    # Update order status
-    update_data = {
-        "status": OrderStatus.CANCELLED.value,
-        "cancelled_at": datetime.now(timezone.utc).isoformat(),
-        "status_history": status_history,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    refund_initiated = False
-    # If payment was completed, initiate refund
-    if order.get("payment_status") == PaymentStatus.COMPLETED.value:
-        try:
-            # Attempt to create refund via Razorpay
-            if order.get("razorpay_payment_id"):
-                refund = create_refund(order["razorpay_payment_id"])
-                update_data["refund_status"] = "initiated"
-                update_data["payment_status"] = PaymentStatus.REFUNDED.value
-                refund_initiated = True
-                logger.info(f"Refund initiated for order {order_id}: {refund['id']}")
-        except Exception as e:
-            logger.error(f"Refund failed for order {order_id}: {str(e)}")
-            update_data["refund_status"] = "pending_manual"
-            update_data["payment_status"] = PaymentStatus.REFUNDED.value  # Mark as refunded for tracking
-    
-    await db.orders.update_one(
-        {"id": order_id},
+    result = await db.reviews.update_one(
+        {"id": review_id},
         {"$set": update_data}
     )
     
-    logger.info(f"Order {order_id} cancelled by {current_user['email']}")
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Review not found")
     
-    return {
-        "success": True,
-        "message": "Order cancelled successfully" + (" and refund initiated" if refund_initiated else ""),
-        "can_reorder": True,
-        "refund_status": update_data.get("refund_status")
-    }
+    return {"message": "Review updated successfully"}
 
-@api_router.post("/chat")
-async def chat_with_bot(chat_request: ChatRequest):
-    try:
-        # Check if genai is available
-        if genai is None:
-            return {
-                "response": "I'm sorry, but the AI chat feature is currently unavailable. Please contact our support team for assistance.",
-                "session_id": chat_request.session_id
-            }
-        
-        # Get Gemini API key from environment
-        gemini_api_key = os.environ.get('GEMINI_API_KEY')
-        if not gemini_api_key:
-            return {
-                "response": "I'm sorry, but the AI chat feature is currently unavailable. Please contact our support team for assistance.",
-                "session_id": chat_request.session_id
-            }
-        
-        # Configure Gemini
-        genai.configure(api_key=gemini_api_key)
-        model = genai.GenerativeModel("gemini-2.0-flash-exp")
-       
-        # Check if user is asking about their orders
-        order_context = ""
-        if any(keyword in chat_request.message.lower() for keyword in ['my order', 'my orders', 'order status', 'track order', 'where is my order']):
-            try:
-                # Try to get recent orders for this session
-                recent_orders = await db.orders.find().sort("created_at", -1).limit(5).to_list(length=5)
-                if recent_orders:
-                    order_context = "\n\nRecent Orders:\n"
-                    for order in recent_orders:
-                        order_context += f"- Order #{order['id'][:8]}: Status: {order['status']}, Amount: ₹{order.get('final_amount', order['total_amount'])}\n"
-            except Exception as e:
-                logger.error(f"Error fetching orders for chatbot: {str(e)}")
-        
-        # Create system message for Mithaas Delights context
-        system_message = f"""You are a helpful customer support assistant for Mithaas Delights, a premium Indian sweets and snacks online store. 
+# ==================== WISHLIST ROUTES ====================
 
-About Mithaas Delights:
-- We sell authentic Indian sweets (mithai), savory snacks (namkeen), laddus, Bengali sweets, dry fruit sweets, and festival specials
-- We offer premium quality products made with traditional recipes and finest ingredients
-- We provide free delivery and accept both Cash on Delivery and online payments
-- Our Contact hours: Monday-Saturday 9:00 AM - 9:00 PM, Sunday 10:00 AM - 8:00 PM
-- Contact: +91 8989549544, mithaasdelightsofficial@gmail.com
-- Location: 64, Kaveri Nagar, Indore, Madhya Pradesh 452006, India
-
-You should help customers with:
-- Product information and recommendations
-- Order placement guidance
-- Delivery and payment information
-- General FAQs about our products and services
-- Order tracking assistance{order_context}
-
-Always be friendly, helpful, and promote our premium quality products. If you don't know specific product details, suggest the customer browse our catalog or contact our support team."""
-        
-        # Get response
-        response = model.generate_content([system_message, chat_request.message])
-        answer = response.text if response else "Sorry, I couldn't generate a response."
-
-        # Store chat in database
-        chat_record = ChatMessage(
-            session_id=chat_request.session_id,
-            message=chat_request.message,
-            response=answer
-        )
-        await db.chat_messages.insert_one(prepare_for_mongo(chat_record.dict()))
-        
-        return {
-            "response": answer,
-            "session_id": chat_request.session_id,
-            "timestamp": chat_record.created_at.isoformat()
-        }
-        
-    except Exception as e:
-        logger.error(f"Chat error: {str(e)}")
-        # Fallback response for errors
-        fallback_responses = [
-            "I'm sorry, I'm having trouble connecting right now. Please try again in a moment or contact our support team at +91 8989549544.",
-            "Thank you for your interest in Mithaas Delights! I'm temporarily unavailable, but you can browse our products or call us at +91 8989549544 for immediate assistance.",
-            "I apologize for the inconvenience. Please feel free to explore our premium collection of sweets and snacks, or reach out to our team directly."
-        ]
-        import random
-        return {
-            "response": random.choice(fallback_responses),
-            "session_id": chat_request.session_id,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "error": "ai_service_unavailable"
-        }
-
-@api_router.get("/chat/history/{session_id}")
-async def get_chat_history(session_id: str):
-    try:
-        chat_history = await db.chat_messages.find(
-            {"session_id": session_id}
-        ).sort("created_at", 1).to_list(length=50)  # Last 50 messages
-        
-        return [
-            {
-                "message": chat["message"],
-                "response": chat["response"],
-                "timestamp": chat["created_at"]
-            }
-            for chat in chat_history
-        ]
-    except Exception as e:
-        logger.error(f"Error fetching chat history: {str(e)}")
-        return []
-
-# ==================== INITIALIZATION ROUTES ====================
-
-@api_router.post("/init-admin")
-async def init_admin():
-    """Initialize admin user (use only once)"""
-    # Check if admin already exists
-    existing_admin = await db.users.find_one({"role": "admin"})
-    if existing_admin:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Admin user already exists"
-        )
-    
-    # Create admin user
-    admin_data = {
-        "id": str(uuid.uuid4()),
-        "name": "Admin",
-        "email": "admin@mithaasdelights.com",
-        "phone": "+91 8989549544",
-        "hashed_password": get_password_hash("admin123"),
-        "role": UserRole.ADMIN.value,
-        "addresses": [],
-        "wishlist": [],
-        "is_active": True,
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
-    
-    await db.users.insert_one(admin_data)
-    
-    return {
-        "message": "Admin user created successfully",
-        "email": "admin@mithaasdelights.com",
-        "password": "admin123",
-        "warning": "Please change this password immediately!"
-    }
-
-@api_router.post("/init-sample-data")
-async def init_sample_data():
-    """Initialize sample products data"""
-    # Sample products with variants
-    sample_products = [
-        {
-            "name": "Kaju Katli",
-            "description": "Premium cashew-based diamond-shaped sweet, rich and melt-in-mouth texture",
-            "category": "mithai",
-            "variants": [
-                {"weight": "250g", "price": 599, "original_price": 699, "is_available": True},
-                {"weight": "500g", "price": 1099, "original_price": 1299, "is_available": True},
-                {"weight": "1kg", "price": 2099, "original_price": 2499, "is_available": True}
-            ],
-            "image_url": "https://recipes.net/wp-content/uploads/2022/07/kaju-katli.jpg",
-            "media_gallery": [
-                "https://recipes.net/wp-content/uploads/2022/07/kaju-katli.jpg"
-            ],
-            "ingredients": ["Cashews", "Sugar", "Ghee", "Silver Leaf"],
-            "is_featured": True,
-            "is_sold_out": False,
-            "discount_percentage": 15
-        },
-        {
-            "name": "Gulab Jamun",
-            "description": "Soft, spongy milk-solid balls soaked in rose-flavored sugar syrup",
-            "category": "mithai",
-            "variants": [
-                {"weight": "250g", "price": 199, "is_available": True},
-                {"weight": "500g", "price": 349, "is_available": True},
-                {"weight": "1kg", "price": 649, "is_available": True}
-            ],
-            "image_url": "https://tse3.mm.bing.net/th/id/OIP.B32bansRI7RS3yfbUSEBNwHaHa?rs=1&pid=ImgDetMain",
-            "media_gallery": ["https://tse3.mm.bing.net/th/id/OIP.B32bansRI7RS3yfbUSEBNwHaHa?rs=1&pid=ImgDetMain"],
-            "ingredients": ["Milk Powder", "Sugar", "Ghee", "Rose Water"],
-            "is_featured": True,
-            "is_sold_out": False
-        },
-        # {
-        #     "name": "Besan Laddu",
-        #     "description": "Traditional gram flour balls sweetened with jaggery and enriched with ghee",
-        #     "category": "laddu",
-        #     "variants": [
-        #         {"weight": "250g", "price": 299, "is_available": True},
-        #         {"weight": "500g", "price": 549, "is_available": True},
-        #         {"weight": "1kg", "price": 999, "is_available": True}
-        #     ],
-        #     "image_url": "https://th.bing.com/th/id/OIP.0ZB3XubESFclOtXe3qJYxwHaHa?w=179&h=180&c=7&r=0&o=7&pid=1.7",
-        #     "media_gallery": ["https://th.bing.com/th/id/OIP.0ZB3XubESFclOtXe3qJYxwHaHa?w=179&h=180&c=7&r=0&o=7&pid=1.7"],
-        #     "ingredients": ["Gram Flour", "Jaggery", "Ghee", "Cashews", "Raisins"],
-        #     "is_featured": True,
-        #     "is_sold_out": False
-        # },
-        {
-            "name": "Masala Mixture",
-            "description": "Crispy blend of lentils, nuts, and spices - perfect tea-time snack",
-            "category": "namkeen",
-            "variants": [
-                {"weight": "250g", "price": 149, "is_available": True},
-                {"weight": "500g", "price": 279, "is_available": True},
-                {"weight": "1kg", "price": 499, "is_available": True}
-            ],
-            "image_url": "https://th.bing.com/th/id/OIP.yPwaOp3hag9pVNe6rTkgfQHaHa?w=166&h=180&c=7&r=0&o=7&pid=1.7",
-            "media_gallery": ["https://th.bing.com/th/id/OIP.yPwaOp3hag9pVNe6rTkgfQHaHa?w=166&h=180&c=7&r=0&o=7&pid=1.7"],
-            "ingredients": ["Lentils", "Peanuts", "Spices", "Vegetable Oil"],
-            "is_sold_out": False
-        },
-        {
-            "name": "Rasgulla",
-            "description": "Soft, spongy cottage cheese balls in light sugar syrup",
-            "category": "bengali_sweets",
-            "variants": [
-                {"weight": "250g", "price": 199, "is_available": True},
-                {"weight": "500g", "price": 349, "is_available": True}
-            ],
-            "image_url": "https://th.bing.com/th/id/OIP.ibmTOU1t-Zl1LKlZUOAewgHaHa?w=225&h=180&c=7&r=0&o=7&pid=1.7",
-            "media_gallery": ["https://th.bing.com/th/id/OIP.ibmTOU1t-Zl1LKlZUOAewgHaHa?w=225&h=180&c=7&r=0&o=7&pid=1.7"],
-            "ingredients": ["Cottage Cheese", "Sugar", "Cardamom"],
-            "is_featured": True,
-            "is_sold_out": True
-        },
-        {
-            "name": "Dry Fruit Barfi",
-            "description": "Rich and nutritious sweet made with assorted dry fruits and khoya",
-            "category": "dry_fruit_sweets",
-            "variants": [
-                {"weight": "250g", "price": 699, "original_price": 799, "is_available": True},
-                {"weight": "500g", "price": 1299, "original_price": 1499, "is_available": True}
-            ],
-            "image_url": "https://th.bing.com/th/id/OIP.gMb3Wu-UzCV_yv4u-yNenwAAAA?w=285&h=190&c=7&r=0&o=7&pid=1.7",
-            "media_gallery": ["https://th.bing.com/th/id/OIP.gMb3Wu-UzCV_yv4u-yNenwAAAA?w=285&h=190&c=7&r=0&o=7&pid=1.7"],
-            "ingredients": ["Almonds", "Cashews", "Pistachios", "Khoya", "Sugar"],
-            "discount_percentage": 11,
-            "is_sold_out": False
-        }
-    ]
-    
-    # Clear existing products
-    await db.products.delete_many({})
-    
-    for product_data in sample_products:
-        product_obj = Product(**product_data)
-        await db.products.insert_one(prepare_for_mongo(product_obj.dict()))
-    
-    return {"message": "Sample data initialized successfully", "products_added": len(sample_products)}
-
-
-# ==================== DELIVERY CALCULATION ROUTES ====================
-
-@api_router.post("/delivery/calculate")
-async def calculate_delivery(
-    pincode: Optional[str] = None,
-    address: Optional[str] = None,
-    latitude: Optional[float] = None,
-    longitude: Optional[float] = None,
-    order_amount: float = 0,
-    delivery_type: str = "delivery"
+@api_router.post("/wishlist/add/{product_id}")
+async def add_to_wishlist(
+    product_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """
-    Calculate delivery charges based on location and order amount
-    Requires either pincode OR lat/lon coordinates
-    """
-    try:
-        # Get coordinates from pincode if not provided
-        if not latitude or not longitude:
-            if pincode:
-                latitude, longitude = await geocode_address(pincode=pincode)
-            else:
-                raise HTTPException(
-                    status_code=400,
-                    detail="Please provide either pincode/address or latitude/longitude"
-                )
-        
-        # Calculate delivery charges
-        delivery_info = calculate_delivery_charge(
-            customer_lat=latitude,
-            customer_lon=longitude,
-            order_amount=order_amount,
-            delivery_type=delivery_type
-        )
-        
-        return delivery_info
-    except Exception as e:
-        logger.error(f"Delivery calculation error: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    """Add product to wishlist"""
+    current_user = await get_current_user(credentials, db)
+    
+    # Verify product exists
+    product = await db.products.find_one({"id": product_id})
+    if not product:
+        raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Add to wishlist
+    result = await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$addToSet": {"wishlist": product_id}}
+    )
+    
+    return {"message": "Product added to wishlist"}
+
+@api_router.delete("/wishlist/remove/{product_id}")
+async def remove_from_wishlist(
+    product_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Remove product from wishlist"""
+    current_user = await get_current_user(credentials, db)
+    
+    result = await db.users.update_one(
+        {"id": current_user["id"]},
+        {"$pull": {"wishlist": product_id}}
+    )
+    
+    return {"message": "Product removed from wishlist"}
+
+@api_router.get("/wishlist", response_model=List[Product])
+async def get_wishlist(credentials: HTTPAuthorizationCredentials = Security(security)):
+    """Get user's wishlist products"""
+    current_user = await get_current_user(credentials, db)
+    
+    wishlist = current_user.get("wishlist", [])
+    if not wishlist:
+        return []
+    
+    products = await db.products.find({"id": {"$in": wishlist}}).to_list(length=None)
+    return [Product(**parse_from_mongo(product)) for product in products]
 
 # ==================== BULK ORDER ROUTES ====================
 
 @api_router.post("/bulk-orders", response_model=BulkOrder)
 async def create_bulk_order(bulk_order: BulkOrderCreate):
     """Create a bulk order request"""
-    bulk_order_obj = BulkOrder(**bulk_order.dict())
+    bulk_order_dict = bulk_order.dict()
+    bulk_order_obj = BulkOrder(**bulk_order_dict)
     await db.bulk_orders.insert_one(prepare_for_mongo(bulk_order_obj.dict()))
-    
-    logger.info(f"Bulk order created: {bulk_order_obj.id} from {bulk_order_obj.company_name}")
+    logger.info(f"Bulk order created: {bulk_order_obj.id}")
     return bulk_order_obj
 
 @api_router.get("/bulk-orders", response_model=List[BulkOrder])
@@ -2534,7 +2086,7 @@ async def update_bulk_order(
     update_data: BulkOrderUpdate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Update bulk order status/quote (Admin only)"""
+    """Update bulk order (Admin only)"""
     await get_current_admin_user(credentials, db)
     
     update_dict = {k: v for k, v in update_data.dict().items() if v is not None}
@@ -2554,400 +2106,109 @@ async def update_bulk_order(
 # ==================== MEDIA GALLERY ROUTES ====================
 
 @api_router.post("/media", response_model=MediaItem)
-async def create_media(
+async def create_media_item(
     media: MediaItemCreate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Create media gallery item (Admin only)"""
+    """Create a media item (Admin only)"""
     await get_current_admin_user(credentials, db)
     
     media_obj = MediaItem(**media.dict())
-    await db.media_gallery.insert_one(prepare_for_mongo(media_obj.dict()))
+    await db.media.insert_one(prepare_for_mongo(media_obj.dict()))
     return media_obj
 
 @api_router.get("/media", response_model=List[MediaItem])
-async def get_media_gallery(active_only: bool = True):
-    """Get media gallery items"""
-    filter_query = {"is_active": True} if active_only else {}
-    media_items = await db.media_gallery.find(filter_query).sort("display_order", 1).to_list(length=None)
+async def get_media_items(active_only: bool = True):
+    """Get all media items"""
+    filter_query = {}
+    if active_only:
+        filter_query["is_active"] = True
+    
+    media_items = await db.media.find(filter_query).sort("display_order", 1).to_list(length=None)
     return [MediaItem(**parse_from_mongo(item)) for item in media_items]
 
+@api_router.put("/media/{media_id}", response_model=MediaItem)
+async def update_media_item(
+    media_id: str,
+    media_update: MediaItemCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update a media item (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    media_dict = media_update.dict()
+    media_dict["updated_at"] = datetime.now(timezone.utc)
+    
+    result = await db.media.update_one(
+        {"id": media_id},
+        {"$set": prepare_for_mongo(media_dict)}
+    )
+    
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Media item not found")
+    
+    updated_media = await db.media.find_one({"id": media_id})
+    return MediaItem(**parse_from_mongo(updated_media))
+
 @api_router.delete("/media/{media_id}")
-async def delete_media(
+async def delete_media_item(
     media_id: str,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Delete media item (Admin only)"""
+    """Delete a media item (Admin only)"""
     await get_current_admin_user(credentials, db)
     
-    result = await db.media_gallery.delete_one({"id": media_id})
+    result = await db.media.delete_one({"id": media_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Media item not found")
     return {"message": "Media item deleted successfully"}
 
-# ==================== FILE UPLOAD ROUTES ====================
-
-class Base64ImageUpload(BaseModel):
-    image_data: str  # base64 encoded image
-    category: str = "media"  # "media", "reviews", "products"
-
-@api_router.post("/upload/base64")
-async def upload_base64_image(
-    upload_data: Base64ImageUpload,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Upload base64 encoded image"""
-    current_user = await get_current_user(credentials, db)
-    
-    # Validate file size (approximately 5MB for base64)
-    base64_size = len(upload_data.image_data)
-    if base64_size > 7000000:  # ~5MB base64 = ~7MB string
-        raise HTTPException(status_code=400, detail="Image size exceeds 5MB limit")
-    
-    # Save image
-    file_url = save_base64_image(upload_data.image_data, upload_data.category)
-    
-    if not file_url:
-        raise HTTPException(status_code=500, detail="Failed to save image")
-    
-    return {"url": file_url, "message": "Image uploaded successfully"}
-
-@api_router.post("/upload/file")
-async def upload_file(
-    file: UploadFile = File(...),
-    category: str = "media",
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Upload file (image/video) - Max 5MB"""
-    current_user = await get_current_user(credentials, db)
-    
-    # Read file data
-    file_data = await file.read()
-    
-    # Validate file size (5MB)
-    if len(file_data) > 5 * 1024 * 1024:
-        raise HTTPException(status_code=400, detail="File size exceeds 5MB limit")
-    
-    # Validate file type
-    allowed_types = ["image/jpeg", "image/jpg", "image/png", "image/gif", "image/webp", "video/mp4", "video/webm"]
-    if file.content_type not in allowed_types:
-        raise HTTPException(
-            status_code=400,
-            detail=f"File type {file.content_type} not allowed. Allowed: images (jpg, png, gif, webp) and videos (mp4, webm)"
-        )
-    
-    # Save file
-    file_url = save_uploaded_file(file_data, file.filename, category)
-    
-    if not file_url:
-        raise HTTPException(status_code=500, detail="Failed to save file")
-    
-    return {
-        "url": file_url,
-        "filename": file.filename,
-        "content_type": file.content_type,
-        "size": len(file_data),
-        "message": "File uploaded successfully"
-    }
-
-# Serve uploaded files
-@api_router.get("/uploads/{category}/{filename}")
-async def serve_upload(category: str, filename: str):
-    """Serve uploaded files"""
-    from file_upload_utils import UPLOAD_DIR
-    file_path = UPLOAD_DIR / category / filename
-    
-    if not file_path.exists():
-        raise HTTPException(status_code=404, detail="File not found")
-    
-    return FileResponse(file_path)
-
-# ==================== ORDER TRACKING ROUTES ====================
-
-@api_router.get("/orders/track/{order_id}")
-async def track_order(order_id: str):
-    """Track order status - Public endpoint"""
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    order_obj = Order(**parse_from_mongo(order))
-    
-    # Return tracking information
-    return {
-        "order_id": order_obj.id,
-        "status": order_obj.status,
-        "status_history": order_obj.status_history,
-        "payment_status": order_obj.payment_status,
-        "created_at": order_obj.created_at,
-        "updated_at": order_obj.updated_at,
-        "estimated_delivery": None  # Can be calculated based on status
-    }
-
-@api_router.put("/orders/{order_id}/update-status")
-async def update_order_status_with_history(
-    order_id: str,
-    status: OrderStatus,
-    note: Optional[str] = None,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Update order status with history tracking (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    # Get current order
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    # Add to status history
-    status_history = order.get("status_history", [])
-    status_history.append({
-        "status": status.value,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "note": note
-    })
-    
-    # Update order
-    result = await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {
-            "status": status.value,
-            "status_history": status_history,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
-    logger.info(f"Order {order_id} status updated to {status.value}")
-    return {"message": "Order status updated successfully", "new_status": status.value}
-
-@api_router.get("/orders/admin/update-stock/{order_id}")
-async def update_order_stock_status(
-    order_id: str,
-    status: OrderStatus,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Update order stock status after delivery (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    result = await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {"status": status.value, "updated_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    logger.info(f"Order {order_id} status updated to {status.value}")
-    return {"message": "Order status updated successfully", "new_status": status.value}
-
-@api_router.put("/orders/{order_id}/update-payment")
-async def update_order_payment(
-    order_id: str,
-    payment_method: Optional[str] = None,
-    payment_status: Optional[PaymentStatus] = None,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Update order payment method and/or status (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    # Get current order
-    order = await db.orders.find_one({"id": order_id})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
-    
-    update_fields = {"updated_at": datetime.now(timezone.utc).isoformat()}
-    
-    if payment_method:
-        update_fields["payment_method"] = payment_method
-    
-    if payment_status:
-        update_fields["payment_status"] = payment_status.value
-    
-    # Update order
-    result = await db.orders.update_one(
-        {"id": order_id},
-        {"$set": update_fields}
-    )
-    
-    logger.info(f"Order {order_id} payment updated: method={payment_method}, status={payment_status}")
-    return {
-        "message": "Order payment updated successfully", 
-        "payment_method": payment_method,
-        "payment_status": payment_status.value if payment_status else None
-    }
-
-
 # ==================== NOTIFICATION SYSTEM ====================
-
-class NotificationType(str, Enum):
-    OFFER = "offer"
-    FESTIVAL = "festival"
-    ORDER_UPDATE = "order_update"
-    NEW_PRODUCT = "new_product"
-    GENERAL = "general"
 
 class Notification(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     title: str
     message: str
-    type: NotificationType = NotificationType.GENERAL
-    target_users: List[str] = []  # Empty means all users
-    is_broadcast: bool = False
-    link: Optional[str] = None
-    image_url: Optional[str] = None
+    type: str = "info"  # info, warning, success, error
+    target_audience: str = "all"  # all, users, admin
+    is_active: bool = True
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     expires_at: Optional[datetime] = None
-    is_active: bool = True
 
 class NotificationCreate(BaseModel):
     title: str
     message: str
-    type: NotificationType = NotificationType.GENERAL
-    is_broadcast: bool = False
-    target_users: List[str] = []
-    link: Optional[str] = None
-    image_url: Optional[str] = None
+    type: str = "info"
+    target_audience: str = "all"
     expires_at: Optional[datetime] = None
 
-class UserNotification(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    user_id: str
-    notification_id: str
-    is_read: bool = False
-    read_at: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-@api_router.post("/notifications")
+@api_router.post("/notifications", response_model=Notification)
 async def create_notification(
     notification: NotificationCreate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Create and send notification (Admin only)"""
+    """Create a notification (Admin only)"""
     await get_current_admin_user(credentials, db)
     
-    notif_obj = Notification(**notification.dict())
-    await db.notifications.insert_one(prepare_for_mongo(notif_obj.dict()))
-    
-    # Create user notifications
-    if notification.is_broadcast or not notification.target_users:
-        # Send to all active users
-        users = await db.users.find({"is_active": True}).to_list(length=None)
-        for user in users:
-            user_notif = UserNotification(
-                user_id=user["id"],
-                notification_id=notif_obj.id
-            )
-            await db.user_notifications.insert_one(prepare_for_mongo(user_notif.dict()))
-    else:
-        # Send to specific users
-        for user_id in notification.target_users:
-            user_notif = UserNotification(
-                user_id=user_id,
-                notification_id=notif_obj.id
-            )
-            await db.user_notifications.insert_one(prepare_for_mongo(user_notif.dict()))
-    
-    logger.info(f"Notification created and sent: {notif_obj.title}")
-    return {"message": "Notification sent successfully", "notification_id": notif_obj.id}
+    notification_obj = Notification(**notification.dict())
+    await db.notifications.insert_one(prepare_for_mongo(notification_obj.dict()))
+    logger.info(f"Notification created: {notification_obj.id}")
+    return notification_obj
 
-@api_router.get("/notifications/my")
-async def get_my_notifications(
-    credentials: HTTPAuthorizationCredentials = Security(security),
-    unread_only: bool = False
-):
-    """Get current user's notifications"""
-    current_user = await get_current_user(credentials, db)
+@api_router.get("/notifications", response_model=List[Notification])
+async def get_notifications(active_only: bool = True):
+    """Get all notifications"""
+    filter_query = {}
+    if active_only:
+        filter_query["is_active"] = True
+        # Filter expired notifications
+        now = datetime.now(timezone.utc).isoformat()
+        filter_query["$or"] = [
+            {"expires_at": None},
+            {"expires_at": {"$gt": now}}
+        ]
     
-    filter_query = {"user_id": current_user["id"]}
-    if unread_only:
-        filter_query["is_read"] = False
-    
-    user_notifs = await db.user_notifications.find(filter_query).sort("created_at", -1).to_list(length=50)
-    
-    # Fetch full notification details
-    result = []
-    for user_notif in user_notifs:
-        notif = await db.notifications.find_one({"id": user_notif["notification_id"]})
-        if notif and notif.get("is_active", True):
-            result.append({
-                **parse_from_mongo(notif),
-                "is_read": user_notif["is_read"],
-                "user_notification_id": user_notif["id"]
-            })
-    
-    return result
-
-@api_router.put("/notifications/{user_notif_id}/read")
-async def mark_notification_read(
-    user_notif_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Mark notification as read"""
-    current_user = await get_current_user(credentials, db)
-    
-    result = await db.user_notifications.update_one(
-        {"id": user_notif_id, "user_id": current_user["id"]},
-        {"$set": {"is_read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    
-    return {"message": "Notification marked as read"}
-
-@api_router.put("/notifications/{notification_id}/mark-read")
-async def mark_notification_as_read(
-    notification_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Mark notification as read (alternative endpoint for frontend compatibility)"""
-    current_user = await get_current_user(credentials, db)
-    
-    result = await db.user_notifications.update_one(
-        {"id": notification_id, "user_id": current_user["id"]},
-        {"$set": {"is_read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Notification not found")
-    
-    return {"message": "Notification marked as read"}
-
-@api_router.put("/notifications/mark-all-read")
-async def mark_all_notifications_read(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Mark all notifications as read for current user"""
-    current_user = await get_current_user(credentials, db)
-    
-    result = await db.user_notifications.update_many(
-        {"user_id": current_user["id"], "is_read": False},
-        {"$set": {"is_read": True, "read_at": datetime.now(timezone.utc).isoformat()}}
-    )
-    
-    return {
-        "message": "All notifications marked as read",
-        "count": result.modified_count
-    }
-
-@api_router.get("/notifications/unread-count")
-async def get_unread_count(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Get count of unread notifications"""
-    current_user = await get_current_user(credentials, db)
-    
-    count = await db.user_notifications.count_documents({
-        "user_id": current_user["id"],
-        "is_read": False
-    })
-    
-    return {"unread_count": count}
-
-@api_router.get("/notifications/admin/all")
-async def get_all_notifications_admin(
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Get all notifications (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    notifications = await db.notifications.find().sort("created_at", -1).to_list(length=None)
+    notifications = await db.notifications.find(filter_query).sort("created_at", -1).to_list(length=None)
     return [Notification(**parse_from_mongo(notif)) for notif in notifications]
 
 @api_router.delete("/notifications/{notification_id}")
@@ -2955,568 +2216,154 @@ async def delete_notification(
     notification_id: str,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Delete notification (Admin only)"""
+    """Delete a notification (Admin only)"""
     await get_current_admin_user(credentials, db)
     
     result = await db.notifications.delete_one({"id": notification_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Notification not found")
-    
-    # Also delete user notifications
-    await db.user_notifications.delete_many({"notification_id": notification_id})
-    
     return {"message": "Notification deleted successfully"}
 
-# ==================== ADVERTISEMENT SYSTEM ====================
+# ==================== CHATBOT ROUTES ====================
 
-class Advertisement(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    title: str
-    description: Optional[str] = None
-    image_url: str
-    video_url: Optional[str] = None
-    cta_text: str = "Learn More"
-    cta_link: Optional[str] = None
-    position: str = "banner"  # banner, sidebar, popup, inline
-    display_type: str = "rotating"  # static, rotating, carousel
-    display_order: int = 0
-    is_active: bool = True
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class AdvertisementCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-    image_url: str
-    video_url: Optional[str] = None
-    cta_text: str = "Learn More"
-    cta_link: Optional[str] = None
-    position: str = "banner"
-    display_type: str = "rotating"
-    display_order: int = 0
-    is_active: bool = True
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
-
-@api_router.post("/advertisements")
-async def create_advertisement(
-    ad: AdvertisementCreate,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Create advertisement (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    ad_obj = Advertisement(**ad.dict())
-    await db.advertisements.insert_one(prepare_for_mongo(ad_obj.dict()))
-    return ad_obj
-
-@api_router.get("/advertisements")
-async def get_advertisements(active_only: bool = True, position: Optional[str] = None):
-    """Get advertisements"""
-    filter_query = {}
-    if active_only:
-        filter_query["is_active"] = True
-        now = datetime.now(timezone.utc).isoformat()
-        filter_query["$or"] = [
-            {"start_date": None},
-            {"start_date": {"$lte": now}}
-        ]
-    
-    if position:
-        filter_query["position"] = position
-    
-    ads = await db.advertisements.find(filter_query).sort("display_order", 1).to_list(length=None)
-    return [Advertisement(**parse_from_mongo(ad)) for ad in ads]
-
-@api_router.put("/advertisements/{ad_id}")
-async def update_advertisement(
-    ad_id: str,
-    ad_update: AdvertisementCreate,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Update advertisement (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    ad_dict = ad_update.dict()
-    ad_dict["updated_at"] = datetime.now(timezone.utc)
-    
-    result = await db.advertisements.update_one(
-        {"id": ad_id},
-        {"$set": prepare_for_mongo(ad_dict)}
-    )
-    
-    if result.matched_count == 0:
-        raise HTTPException(status_code=404, detail="Advertisement not found")
-    
-    updated_ad = await db.advertisements.find_one({"id": ad_id})
-    return Advertisement(**parse_from_mongo(updated_ad))
-
-@api_router.delete("/advertisements/{ad_id}")
-async def delete_advertisement(
-    ad_id: str,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Delete advertisement (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    result = await db.advertisements.delete_one({"id": ad_id})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Advertisement not found")
-    return {"message": "Advertisement deleted successfully"}
-
-# ==================== CART SYNC ENDPOINT ====================
-
-class CartSyncRequest(BaseModel):
-    local_cart_items: List[CartItemModel]
-
-@api_router.post("/cart/sync")
-async def sync_cart(
-    sync_request: CartSyncRequest,
-    credentials: HTTPAuthorizationCredentials = Security(security)
-):
-    """Sync local storage cart with database cart on login"""
-    current_user = await get_current_user(credentials, db)
-    
-    # Get existing cart
-    cart = await db.carts.find_one({"user_id": current_user["id"]})
-    
-    if not cart:
-        # Create new cart with local items
-        new_cart = Cart(user_id=current_user["id"], items=sync_request.local_cart_items)
-        await db.carts.insert_one(prepare_for_mongo(new_cart.dict()))
-        return {"message": "Cart synced successfully", "items": sync_request.local_cart_items}
-    
-    # Merge carts - combine by product_id + variant_weight
-    existing_items = cart.get("items", [])
-    merged_items = {f"{item['product_id']}-{item['variant_weight']}": item for item in existing_items}
-    
-    for local_item in sync_request.local_cart_items:
-        key = f"{local_item.product_id}-{local_item.variant_weight}"
-        if key in merged_items:
-            # Increase quantity
-            merged_items[key]["quantity"] += local_item.quantity
-        else:
-            # Add new item
-            merged_items[key] = local_item.dict()
-    
-    # Remove unavailable products
-    valid_items = []
-    for item in merged_items.values():
-        product = await db.products.find_one({"id": item["product_id"]})
-        if product and product.get("is_available", True) and not product.get("is_sold_out", False):
-            # Verify variant still exists
-            variants = product.get("variants", [])
-            variant_exists = any(v["weight"] == item["variant_weight"] for v in variants)
-            if variant_exists:
-                valid_items.append(item)
-    
-    # Update cart
-    await db.carts.update_one(
-        {"user_id": current_user["id"]},
-        {"$set": {
-            "items": valid_items,
-            "updated_at": datetime.now(timezone.utc).isoformat()
-        }}
-    )
-    
-    return {"message": "Cart synced successfully", "items": valid_items}
-
-# Include the router in the main app
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ==================== ENHANCED FEATURES ====================
-
-# Initialize enhanced system managers
-try:
-    from notification_system import NotificationManager, NotificationCreate, Notification
-    from theme_system import ThemeManager, ThemeConfig, ThemeCreateUpdate
-    from advertisement_system import AdvertisementManager, EnhancedBanner, BannerCreate
-    from enhanced_delivery_system import calculate_delivery_charge, get_delivery_policy_info, delivery_calculator
-    from enhanced_chatbot import OrderAwareChatBot, ChatRequest as EnhancedChatRequest
-    from file_upload_utils import save_base64_image, save_uploaded_file, delete_file
-    
-    # Initialize managers
-    notification_manager = NotificationManager(db)
-    theme_manager = ThemeManager(db)
-    advertisement_manager = AdvertisementManager(db)
-    enhanced_chatbot = OrderAwareChatBot(db)
-    
-    ENHANCED_FEATURES_AVAILABLE = True
-    logger.info("Enhanced features loaded successfully")
-    
-except ImportError as e:
-    ENHANCED_FEATURES_AVAILABLE = False
-    logger.warning(f"Enhanced features not available: {str(e)}")
-
-# ==================== ENHANCED SYSTEM INITIALIZATION ====================
-
-@api_router.post("/init-enhanced-systems")
-async def initialize_enhanced_systems(credentials: HTTPAuthorizationCredentials = Security(security)):
-    """Initialize all enhanced systems (Admin only)"""
-    await get_current_admin_user(credentials, db)
-    
-    if not ENHANCED_FEATURES_AVAILABLE:
-        raise HTTPException(status_code=503, detail="Enhanced features not available")
+@api_router.post("/chatbot")
+async def chat_with_bot(chat_request: ChatRequest):
+    """Chat with Gemini AI bot"""
+    if not genai:
+        raise HTTPException(
+            status_code=503,
+            detail="Chatbot service unavailable. Google Generative AI not installed."
+        )
     
     try:
-        # Initialize default themes
-        await theme_manager.initialize_default_themes()
-        
-        return {
-            "message": "Enhanced systems initialized successfully",
-            "systems": [
-                "notification_system",
-                "theme_system", 
-                "advertisement_system",
-                "enhanced_delivery",
-                "order_aware_chatbot",
-                "file_upload_system"
-            ]
-        }
-    except Exception as e:
-        logger.error(f"Enhanced system initialization error: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Initialization failed: {str(e)}")
-
-# ==================== ENHANCED NOTIFICATION ROUTES ====================
-
-if ENHANCED_FEATURES_AVAILABLE:
-    
-    @api_router.post("/notifications/enhanced")
-    async def create_enhanced_notification(
-        notification_data: NotificationCreate,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Create a new notification (Admin only)"""
-        admin_user = await get_current_admin_user(credentials, db)
-        notification = await notification_manager.create_notification(notification_data, admin_user["id"])
-        return notification
-
-    @api_router.post("/notifications/{notification_id}/broadcast")
-    async def broadcast_notification(
-        notification_id: str,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Broadcast notification to target audience (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        result = await notification_manager.broadcast_notification(notification_id)
-        return result
-
-    @api_router.get("/notifications/my-notifications")
-    async def get_my_notifications(
-        unread_only: bool = False,
-        limit: int = 50,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Get user's notifications"""
-        current_user = await get_current_user(credentials, db)
-        notifications = await notification_manager.get_user_notifications(
-            current_user["id"], unread_only, limit
-        )
-        return notifications
-
-# ==================== ENHANCED THEME ROUTES ====================
-
-    @api_router.get("/themes/enhanced/active")
-    async def get_active_enhanced_theme():
-        """Get currently active theme"""
-        theme = await theme_manager.get_active_theme()
-        return theme
-
-    @api_router.get("/themes/enhanced/all")
-    async def get_all_enhanced_themes():
-        """Get all available themes"""
-        themes = await theme_manager.get_all_themes()
-        return themes
-
-    @api_router.put("/themes/enhanced/{theme_id}/activate")
-    async def activate_enhanced_theme(
-        theme_id: str,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Activate a theme (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        success = await theme_manager.activate_theme(theme_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Theme not found")
-        
-        logger.info(f"Theme activated: {theme_id}")
-        return {"message": "Theme activated successfully"}
-
-    @api_router.get("/themes/enhanced/active/css")
-    async def get_active_enhanced_theme_css():
-        """Get CSS for currently active theme"""
-        theme = await theme_manager.get_active_theme()
-        css = theme_manager.generate_css_variables(theme)
-        return {
-            "theme_id": theme.id,
-            "theme_name": theme.display_name,
-            "css": css
-        }
-
-# ==================== ENHANCED BANNER ROUTES ====================
-
-    @api_router.post("/banners/enhanced")
-    async def create_enhanced_banner(
-        banner_data: BannerCreate,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Create a new enhanced banner (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        banner = await advertisement_manager.create_banner(banner_data)
-        logger.info(f"Enhanced banner created: {banner.id}")
-        return banner
-
-    @api_router.get("/banners/enhanced")
-    async def get_enhanced_banners(
-        placement: Optional[str] = None,
-        active_only: bool = True
-    ):
-        """Get enhanced banners"""
-        banners = await advertisement_manager.get_banners(placement, active_only)
-        return banners
-
-    @api_router.put("/banners/enhanced/{banner_id}")
-    async def update_enhanced_banner(
-        banner_id: str,
-        banner_data: BannerCreate,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Update enhanced banner (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        try:
-            banner = await advertisement_manager.update_banner(banner_id, banner_data)
-            logger.info(f"Banner updated: {banner_id}")
-            return banner
-        except ValueError as e:
-            raise HTTPException(status_code=404, detail=str(e))
-
-    @api_router.delete("/banners/enhanced/{banner_id}")
-    async def delete_enhanced_banner(
-        banner_id: str,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Delete enhanced banner (Admin only)"""
-        await get_current_admin_user(credentials, db)
-        success = await advertisement_manager.delete_banner(banner_id)
-        if not success:
-            raise HTTPException(status_code=404, detail="Banner not found")
-        
-        logger.info(f"Banner deleted: {banner_id}")
-        return {"message": "Banner deleted successfully"}
-
-# ==================== ENHANCED DELIVERY ROUTES ====================
-
-    @api_router.post("/delivery/enhanced/calculate")
-    async def calculate_enhanced_delivery_charges(
-        customer_lat: float,
-        customer_lon: float,
-        order_amount: float,
-        delivery_type: str = "delivery"
-    ):
-        """Calculate delivery charges with distance-based logic"""
-        if not delivery_calculator.validate_coordinates(customer_lat, customer_lon):
-            raise HTTPException(status_code=400, detail="Invalid coordinates")
-        
-        result = delivery_calculator.calculate_with_caching(
-            customer_lat, customer_lon, order_amount, delivery_type
-        )
-        return result
-
-    @api_router.get("/delivery/enhanced/policy")
-    async def get_enhanced_delivery_policy():
-        """Get delivery policy information"""
-        return get_delivery_policy_info()
-
-# ==================== ENHANCED CHATBOT ROUTES ====================
-
-    @api_router.post("/chat/enhanced/message")
-    async def send_enhanced_chat_message(
-        chat_request: EnhancedChatRequest,
-        credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
-    ):
-        """Send message to order-aware chatbot"""
-        user_id = None
-        if credentials:
-            try:
-                current_user = await get_current_user(credentials, db)
-                user_id = current_user["id"]
-                chat_request.user_id = user_id
-            except:
-                pass  # Allow anonymous chat
-        
-        response = await enhanced_chatbot.process_message(chat_request)
-        return response
-
-# ==================== FILE UPLOAD ROUTES ====================
-
-    class FileUploadResponse(BaseModel):
-        success: bool
-        file_url: Optional[str] = None
-        error: Optional[str] = None
-
-    @api_router.post("/upload/enhanced/base64-image")
-    async def upload_enhanced_base64_image(
-        base64_data: str,
-        category: str = "media",
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Upload base64 encoded image"""
-        await get_current_user(credentials, db)
-        
-        file_url = save_base64_image(base64_data, category)
-        
-        if file_url:
-            return FileUploadResponse(success=True, file_url=file_url)
-        else:
-            return FileUploadResponse(success=False, error="Failed to save image")
-
-# ==================== ENHANCED REVIEW ROUTES ====================
-
-    class ReviewCreateWithPhotos(BaseModel):
-        product_id: str
-        rating: int = Field(ge=1, le=5)
-        comment: str
-        images: List[str] = []
-
-    @api_router.post("/reviews/enhanced/with-photos")
-    async def create_review_with_photos(
-        review_data: ReviewCreateWithPhotos,
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Create a review with photo attachments"""
-        current_user = await get_current_user(credentials, db)
-        
-        review_dict = review_data.dict()
-        review_dict["user_id"] = current_user["id"]
-        review_dict["user_name"] = current_user["name"]
-        
-        review_obj = Review(**review_dict)
-        await db.reviews.insert_one(prepare_for_mongo(review_obj.dict()))
-        
-        logger.info(f"Review with photos created: {review_obj.id}")
-        return {"message": "Review with photos submitted successfully", "review_id": review_obj.id}
-
-# ==================== ENHANCED CART SYNC ====================
-
-    @api_router.post("/cart/enhanced/sync")
-    async def sync_enhanced_cart(
-        local_cart_items: List[CartItemModel],
-        credentials: HTTPAuthorizationCredentials = Security(security)
-    ):
-        """Sync local storage cart with database cart on login"""
-        current_user = await get_current_user(credentials, db)
-        
-        # Get existing DB cart
-        db_cart = await db.carts.find_one({"user_id": current_user["id"]})
-        
-        if not db_cart:
-            # Create new cart with local items
-            new_cart = Cart(
-                user_id=current_user["id"],
-                items=local_cart_items
-            )
-            await db.carts.insert_one(prepare_for_mongo(new_cart.dict()))
-            merged_items = local_cart_items
-        else:
-            # Merge local items with DB items
-            db_items = db_cart.get("items", [])
-            merged_items = []
-            
-            # Convert to dict for easy lookup
-            db_items_dict = {
-                f"{item['product_id']}-{item['variant_weight']}": item 
-                for item in db_items
-            }
-            
-            # Add local items
-            for local_item in local_cart_items:
-                item_key = f"{local_item.product_id}-{local_item.variant_weight}"
-                if item_key in db_items_dict:
-                    # Merge quantities
-                    db_items_dict[item_key]["quantity"] += local_item.quantity
-                else:
-                    # Add new item
-                    db_items_dict[item_key] = local_item.dict()
-            
-            merged_items = list(db_items_dict.values())
-            
-            # Update cart in DB
-            await db.carts.update_one(
-                {"user_id": current_user["id"]},
-                {"$set": {
-                    "items": merged_items,
-                    "updated_at": datetime.now(timezone.utc).isoformat()
-                }}
+        # Configure Gemini API
+        gemini_api_key = os.environ.get('GEMINI_API_KEY')
+        if not gemini_api_key:
+            raise HTTPException(
+                status_code=503,
+                detail="Chatbot service not configured. Missing GEMINI_API_KEY."
             )
         
-        logger.info(f"Cart synced for user {current_user['id']}: {len(merged_items)} items")
+        genai.configure(api_key=gemini_api_key)
+        
+        # Create model
+        model = genai.GenerativeModel('gemini-pro')
+        
+        # Generate response
+        prompt = f"""You are a helpful customer service assistant for Mithaas Delights, 
+        a premium Indian sweets and snacks shop. Answer questions about:
+        - Product information (sweets, namkeen, traditional Indian sweets)
+        - Order placement and delivery
+        - Store location and hours
+        - Ingredients and allergens
+        
+        User question: {chat_request.message}"""
+        
+        response = model.generate_content(prompt)
+        
+        # Store chat message
+        chat_message = ChatMessage(
+            session_id=chat_request.session_id,
+            message=chat_request.message,
+            response=response.text
+        )
+        await db.chat_messages.insert_one(prepare_for_mongo(chat_message.dict()))
+        
         return {
-            "message": "Cart synced successfully",
-            "items": merged_items,
-            "item_count": len(merged_items)
+            "response": response.text,
+            "session_id": chat_request.session_id
+        }
+    
+    except Exception as e:
+        logger.error(f"Chatbot error: {str(e)}")
+        return {
+            "response": "I apologize, but I'm having trouble processing your request right now. Please try again later or contact our support team.",
+            "session_id": chat_request.session_id,
+            "error": str(e)
         }
 
-# ==================== SYSTEM STATUS ====================
+# ==================== UTILITY ROUTES ====================
 
-@api_router.get("/system/enhanced/status")
-async def get_enhanced_system_status():
-    """Get overall enhanced system status"""
-    try:
-        # Test database connection
-        await db.users.find_one({})
-        db_status = "healthy"
-    except Exception as e:
-        db_status = f"error: {str(e)}"
+@api_router.post("/init-sample-data")
+async def init_sample_data():
+    """Initialize sample products for testing"""
+    # Check if products already exist
+    existing_count = await db.products.count_documents({})
+    if existing_count > 0:
+        return {"message": "Sample data already exists", "count": existing_count}
     
-    services = {
-        "database": db_status,
-        "enhanced_features": "available" if ENHANCED_FEATURES_AVAILABLE else "unavailable"
+    sample_products = [
+        {
+            "name": "Kaju Katli",
+            "description": "Premium cashew fudge made with finest cashews and pure ghee",
+            "category": "mithai",
+            "image_url": "https://via.placeholder.com/400x300/ff9800/ffffff?text=Kaju+Katli",
+            "variants": [
+                {"weight": "250g", "price": 450, "is_available": True},
+                {"weight": "500g", "price": 850, "is_available": True},
+                {"weight": "1kg", "price": 1600, "is_available": True}
+            ],
+            "is_featured": True,
+            "rating": 4.8,
+            "review_count": 124
+        },
+        {
+            "name": "Motichoor Laddu",
+            "description": "Traditional round sweet balls made with gram flour and sugar",
+            "category": "laddu",
+            "image_url": "https://via.placeholder.com/400x300/ff6f00/ffffff?text=Motichoor+Laddu",
+            "variants": [
+                {"weight": "250g", "price": 180, "is_available": True},
+                {"weight": "500g", "price": 340, "is_available": True},
+                {"weight": "1kg", "price": 650, "is_available": True}
+            ],
+            "is_featured": True,
+            "rating": 4.6,
+            "review_count": 89
+        }
+    ]
+    
+    for prod_data in sample_products:
+        product = Product(**prod_data)
+        await db.products.insert_one(prepare_for_mongo(product.dict()))
+    
+    return {"message": f"Created {len(sample_products)} sample products"}
+
+@api_router.post("/init-admin")
+async def init_admin():
+    """Initialize default admin user"""
+    admin_email = "admin@mithaasdelights.com"
+    
+    # Check if admin exists
+    existing_admin = await db.users.find_one({"email": admin_email})
+    if existing_admin:
+        return {"message": "Admin user already exists"}
+    
+    # Create admin user
+    admin_data = {
+        "id": str(uuid.uuid4()),
+        "name": "Admin",
+        "email": admin_email,
+        "hashed_password": get_password_hash("admin123"),
+        "role": UserRole.ADMIN.value,
+        "addresses": [],
+        "wishlist": [],
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": datetime.now(timezone.utc).isoformat()
     }
     
-    if ENHANCED_FEATURES_AVAILABLE:
-        services.update({
-            "ai_chatbot": "healthy" if hasattr(enhanced_chatbot, 'model') and enhanced_chatbot.model else "fallback_mode",
-            "file_uploads": "healthy",
-            "notifications": "healthy",
-            "themes": "healthy",
-            "advertisements": "healthy",
-            "delivery_calculator": "healthy"
-        })
+    await db.users.insert_one(admin_data)
     
     return {
-        "status": "healthy",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "services": services,
-        "features": [
-            "✅ Admin Action Immediate Reflection",
-            "✅ Review Photo Attachments", 
-            "✅ Cart Persistence with Sync",
-            "✅ Media Gallery Support",
-            "✅ Distance-based Delivery Calculation", 
-            "✅ Order-aware AI Chatbot",
-            "✅ Multi-theme Support (Admin Selectable)",
-            "✅ Enhanced Notification System",
-            "✅ Banner & Advertisement Management",
-            "✅ File Upload System",
-            "✅ Cache Invalidation"
-        ] if ENHANCED_FEATURES_AVAILABLE else ["Basic features only"]
+        "message": "Admin user created successfully",
+        "email": admin_email,
+        "password": "admin123"
     }
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
 
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
+# Mount the API router
+app.include_router(api_router)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8001)
