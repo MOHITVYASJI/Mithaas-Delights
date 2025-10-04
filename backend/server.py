@@ -26,6 +26,9 @@ from auth_utils import (
 from delivery_utils import calculate_delivery_charge, geocode_address
 from razorpay_utils import create_razorpay_order, verify_razorpay_signature, create_refund
 from file_upload_utils import save_base64_image, save_uploaded_file, get_file_size
+# Import notification and theme system classes
+from notification_system import NotificationManager, NotificationStatus
+from theme_system import ThemeManager, ThemeConfig, ThemeCreateUpdate, DEFAULT_THEMES
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -38,6 +41,10 @@ logger = logging.getLogger(__name__)
 mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
+
+# Initialize Notification and Theme Managers
+notification_manager = NotificationManager(db)
+theme_manager = ThemeManager(db)
 
 # Create the main app without a prefix
 app = FastAPI(title="Mithaas Delights API", version="1.0.0")
@@ -2803,6 +2810,318 @@ async def chat_with_bot(chat_request: ChatRequest):
             "session_id": chat_request.session_id,
             "error": str(e)
         }
+
+# ==================== NOTIFICATION ROUTES ====================
+
+@api_router.post("/notifications", response_model=dict)
+async def create_notification(
+    notification_data: NotificationCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create a new notification (Admin only)"""
+    admin_user = await get_current_admin_user(credentials, db)
+    
+    try:
+        notification = await notification_manager.create_notification(
+            notification_data, 
+            admin_user["id"]
+        )
+        
+        # Auto-broadcast if it's not user-specific
+        if notification.target_audience in ["all", "users"]:
+            broadcast_result = await notification_manager.broadcast_notification(notification.id)
+            return {
+                "message": "Notification created and broadcasted successfully",
+                "notification_id": notification.id,
+                "broadcast_result": broadcast_result
+            }
+        else:
+            return {
+                "message": "Notification created successfully",
+                "notification_id": notification.id
+            }
+    except Exception as e:
+        logger.error(f"Error creating notification: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/notifications/my-notifications")
+async def get_user_notifications(
+    limit: int = 50,
+    unread_only: bool = False,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get notifications for current user"""
+    current_user = await get_current_user(credentials, db)
+    
+    try:
+        notifications = await notification_manager.get_user_notifications(
+            current_user["id"], 
+            unread_only=unread_only,
+            limit=limit
+        )
+        return notifications
+    except Exception as e:
+        logger.error(f"Error fetching user notifications: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/notifications/{notification_id}/mark-read")
+async def mark_notification_read(
+    notification_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Mark notification as read"""
+    current_user = await get_current_user(credentials, db)
+    
+    try:
+        success = await notification_manager.mark_notification_read(
+            notification_id, 
+            current_user["id"]
+        )
+        if success:
+            return {"message": "Notification marked as read"}
+        else:
+            raise HTTPException(status_code=404, detail="Notification not found")
+    except Exception as e:
+        logger.error(f"Error marking notification as read: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/notifications/mark-all-read")
+async def mark_all_notifications_read(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Mark all notifications as read for current user"""
+    current_user = await get_current_user(credentials, db)
+    
+    try:
+        # Get all unread notifications for user
+        notifications = await notification_manager.get_user_notifications(
+            current_user["id"], 
+            unread_only=True
+        )
+        
+        # Mark each as read
+        for notification in notifications:
+            await notification_manager.mark_notification_read(
+                notification["id"], 
+                current_user["id"]
+            )
+        
+        return {"message": f"Marked {len(notifications)} notifications as read"}
+    except Exception as e:
+        logger.error(f"Error marking all notifications as read: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/notifications/{notification_id}")
+async def delete_notification(
+    notification_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Dismiss/delete notification for current user"""
+    current_user = await get_current_user(credentials, db)
+    
+    try:
+        success = await notification_manager.dismiss_notification(
+            notification_id, 
+            current_user["id"]
+        )
+        if success:
+            return {"message": "Notification dismissed"}
+        else:
+            raise HTTPException(status_code=404, detail="Notification not found")
+    except Exception as e:
+        logger.error(f"Error dismissing notification: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/notifications/unread-count")
+async def get_unread_notifications_count(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get count of unread notifications"""
+    current_user = await get_current_user(credentials, db)
+    
+    try:
+        count = await notification_manager.get_unread_count(current_user["id"])
+        return {"unread_count": count}
+    except Exception as e:
+        logger.error(f"Error getting unread count: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/notifications/admin/all")
+async def get_all_notifications_admin(
+    limit: int = 100,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get all notifications for admin panel"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        # Get all notifications from database
+        notifications_cursor = db.notifications.find().sort("created_at", -1).limit(limit)
+        notifications = []
+        
+        async for notification in notifications_cursor:
+            notification_dict = notification_manager._parse_from_mongo(notification)
+            notifications.append(notification_dict)
+        
+        return notifications
+    except Exception as e:
+        logger.error(f"Error getting all notifications: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/notifications/admin/{notification_id}")
+async def delete_notification_admin(
+    notification_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete notification permanently (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        # Delete from database
+        result = await db.notifications.delete_one({"id": notification_id})
+        
+        if result.deleted_count > 0:
+            return {"message": "Notification deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Notification not found")
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error deleting notification: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# ==================== THEME ROUTES ====================
+
+@api_router.get("/themes/active")
+async def get_active_theme():
+    """Get currently active theme"""
+    try:
+        theme = await theme_manager.get_active_theme()
+        return theme
+    except Exception as e:
+        logger.error(f"Error getting active theme: {str(e)}")
+        # Return default theme if error
+        return DEFAULT_THEMES["orange_default"]
+
+@api_router.get("/themes")
+async def get_all_themes():
+    """Get all available themes"""
+    try:
+        themes = await theme_manager.get_all_themes()
+        return themes
+    except Exception as e:
+        logger.error(f"Error getting themes: {str(e)}")
+        # Return default themes if error
+        return list(DEFAULT_THEMES.values())
+
+@api_router.post("/themes", response_model=ThemeConfig)
+async def create_theme(
+    theme_data: ThemeCreateUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create a new custom theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        theme = await theme_manager.create_theme(theme_data)
+        return theme
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error creating theme: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/themes/{theme_id}", response_model=ThemeConfig)
+async def update_theme(
+    theme_id: str,
+    theme_data: ThemeCreateUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        theme = await theme_manager.update_theme(theme_id, theme_data)
+        return theme
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating theme: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/themes/{theme_id}/activate")
+async def activate_theme(
+    theme_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Activate a theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        success = await theme_manager.activate_theme(theme_id)
+        if success:
+            return {"message": "Theme activated successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Theme not found")
+    except Exception as e:
+        logger.error(f"Error activating theme: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/themes/{theme_id}")
+async def delete_theme(
+    theme_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete a custom theme (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        success = await theme_manager.delete_theme(theme_id)
+        if success:
+            return {"message": "Theme deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Theme not found")
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error deleting theme: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/themes/{theme_id}/css")
+async def get_theme_css(theme_id: str):
+    """Get CSS for a specific theme"""
+    try:
+        # Get theme from database
+        theme_data = await db.themes.find_one({"id": theme_id})
+        if not theme_data:
+            raise HTTPException(status_code=404, detail="Theme not found")
+        
+        theme = ThemeConfig(**theme_manager._parse_from_mongo(theme_data))
+        css = theme_manager.generate_css_variables(theme)
+        
+        return {"css": css}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error generating theme CSS: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/themes/initialize-defaults")
+async def initialize_default_themes(
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Initialize default themes (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        success = await theme_manager.initialize_default_themes()
+        if success:
+            return {"message": "Default themes initialized successfully"}
+        else:
+            return {"message": "Failed to initialize default themes"}
+    except Exception as e:
+        logger.error(f"Error initializing default themes: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ==================== UTILITY ROUTES ====================
 

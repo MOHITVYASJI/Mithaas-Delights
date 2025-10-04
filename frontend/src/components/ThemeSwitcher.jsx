@@ -58,12 +58,12 @@ export const ThemeSwitcher = () => {
 
   const loadActiveTheme = async () => {
     try {
-      const response = await axios.get(`${API}/settings/theme`);
+      const response = await axios.get(`${API}/themes/active`);
       const theme = response.data;
       
       // Apply theme colors
       applyTheme(theme);
-      setActiveTheme(theme.theme_name || 'default');
+      setActiveTheme(theme.name || 'default');
     } catch (error) {
       console.error('Error loading theme:', error);
       // Apply default theme
@@ -73,13 +73,8 @@ export const ThemeSwitcher = () => {
 
   const fetchCustomThemes = async () => {
     try {
-      const token = localStorage.getItem('token');
-      if (!token) return;
-
-      const response = await axios.get(`${API}/settings/themes`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setCustomThemes(response.data);
+      const response = await axios.get(`${API}/themes`);
+      setCustomThemes(response.data || []);
     } catch (error) {
       console.error('Error fetching custom themes:', error);
     }
@@ -133,8 +128,13 @@ export const ThemeSwitcher = () => {
   const switchToCustomTheme = async (themeId) => {
     try {
       const token = localStorage.getItem('token');
-      const response = await axios.put(
-        `${API}/settings/theme/${themeId}/activate`,
+      if (!token) {
+        toast.error('Please login to change themes');
+        return;
+      }
+      
+      await axios.put(
+        `${API}/themes/${themeId}/activate`,
         {},
         { headers: { Authorization: `Bearer ${token}` } }
       );

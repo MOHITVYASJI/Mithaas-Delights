@@ -46,7 +46,12 @@ export const NotificationSystem = ({ isAuthenticated }) => {
       });
       
       setNotifications(response.data);
-      setUnreadCount(response.data.filter(n => !n.is_read).length);
+      
+      // Get unread count
+      const countResponse = await axios.get(`${API}/notifications/unread-count`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUnreadCount(countResponse.data.unread_count);
     } catch (error) {
       console.error('Error fetching notifications:', error);
     }
