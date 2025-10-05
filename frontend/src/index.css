@@ -45,6 +45,14 @@ code {
         --chart-4: 43 74% 66%;
         --chart-5: 27 87% 67%;
         --radius: 0.5rem;
+        
+        /* Custom theme colors */
+        --primary-color: #f97316;
+        --secondary-color: #f59e0b;
+        --accent-color: #ea580c;
+        --background-color: #fff7ed;
+        --text-primary: #1f2937;
+        --text-secondary: #6b7280;
     }
   .dark {
         --background: 0 0% 3.9%;
@@ -71,6 +79,14 @@ code {
         --chart-3: 30 80% 55%;
         --chart-4: 280 65% 60%;
         --chart-5: 340 75% 55%;
+        
+        /* Custom theme colors for dark mode */
+        --primary-color: #f97316;
+        --secondary-color: #f59e0b;
+        --accent-color: #ea580c;
+        --background-color: #111827;
+        --text-primary: #f9fafb;
+        --text-secondary: #d1d5db;
     }
 }
 

@@ -29,6 +29,7 @@ from file_upload_utils import save_base64_image, save_uploaded_file, get_file_si
 # Import notification and theme system classes
 from notification_system import NotificationManager, NotificationStatus
 from theme_system import ThemeManager, ThemeConfig, ThemeCreateUpdate, DEFAULT_THEMES
+from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
@@ -36,6 +37,26 @@ load_dotenv(ROOT_DIR / '.env')
 # Setup logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+# Helper function to convert MongoDB ObjectId to string for JSON serialization
+def serialize_mongo_document(doc):
+    """Convert MongoDB document to JSON-serializable dict by converting ObjectId to string"""
+    if doc is None:
+        return None
+    if isinstance(doc, list):
+        return [serialize_mongo_document(item) for item in doc]
+    if isinstance(doc, dict):
+        serialized = {}
+        for key, value in doc.items():
+            if isinstance(value, ObjectId):
+                serialized[key] = str(value)
+            elif isinstance(value, dict):
+                serialized[key] = serialize_mongo_document(value)
+            elif isinstance(value, list):
+                serialized[key] = serialize_mongo_document(value)
+            else:
+                serialized[key] = value
+        return serialized
+    return doc
 
 # MongoDB connection
 mongo_url = os.environ['MONGO_URL']
@@ -486,7 +507,11 @@ def prepare_for_mongo(data):
     return data
 
 def parse_from_mongo(item):
-    """Parse MongoDB document back to Python objects"""
+    """Parse MongoDB document back to Python objects and serialize ObjectId"""
+    # First serialize ObjectId fields to strings
+    item = serialize_mongo_document(item)
+    
+    # Then parse datetime strings back to datetime objects
     if isinstance(item.get('created_at'), str):
         item['created_at'] = datetime.fromisoformat(item['created_at'])
     if isinstance(item.get('updated_at'), str):
@@ -2960,6 +2985,9 @@ async def get_all_notifications_admin(
         notifications = []
         
         async for notification in notifications_cursor:
+            # First serialize MongoDB ObjectId fields
+            notification = serialize_mongo_document(notification)
+            # Then parse datetime strings
             notification_dict = notification_manager._parse_from_mongo(notification)
             notifications.append(notification_dict)
         

@@ -1271,14 +1271,13 @@ const BannerManagement = ({ banners, fetchBanners, loading }) => {
 
   const toggleBannerStatus = async (bannerId, currentStatus) => {
     try {
-      await axios.put(`${API}/banners/${bannerId}`, {
-        is_active: !currentStatus
-      }, {
+      await axios.put(`${API}/banners/${bannerId}/toggle`, {}, {
         headers: getAuthHeaders()
       });
       toast.success(`Banner ${!currentStatus ? 'activated' : 'deactivated'}`);
       fetchBanners();
     } catch (error) {
+      console.error('Error toggling banner status:', error);
       toast.error('Failed to update banner status');
     }
   };

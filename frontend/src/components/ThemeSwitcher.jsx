@@ -82,6 +82,7 @@ export const ThemeSwitcher = () => {
 
   const applyTheme = (theme) => {
     const root = document.documentElement;
+    const body = document.body;
     
     if (typeof theme === 'string') {
       // Pre-defined theme
@@ -93,6 +94,17 @@ export const ThemeSwitcher = () => {
         root.style.setProperty('--background-color', predef.background_color);
         root.style.setProperty('--text-primary', predef.text_primary);
         root.style.setProperty('--text-secondary', predef.text_secondary);
+        
+        // Apply to body background
+        if (theme === 'dark') {
+          body.style.backgroundColor = predef.background_color;
+          body.style.color = predef.text_primary;
+          root.classList.add('dark');
+        } else {
+          body.style.backgroundColor = predef.background_color;
+          body.style.color = predef.text_primary;
+          root.classList.remove('dark');
+        }
       }
     } else {
       // Custom theme from backend
@@ -102,10 +114,17 @@ export const ThemeSwitcher = () => {
       root.style.setProperty('--background-color', theme.background_color || PREDEFINED_THEMES.default.background_color);
       root.style.setProperty('--text-primary', theme.text_primary || PREDEFINED_THEMES.default.text_primary);
       root.style.setProperty('--text-secondary', theme.text_secondary || PREDEFINED_THEMES.default.text_secondary);
+      
+      // Apply to body
+      body.style.backgroundColor = theme.background_color || PREDEFINED_THEMES.default.background_color;
+      body.style.color = theme.text_primary || PREDEFINED_THEMES.default.text_primary;
     }
 
     // Save to localStorage
     localStorage.setItem('active-theme', typeof theme === 'string' ? theme : theme.theme_name);
+    
+    // Force re-render by dispatching a custom event
+    window.dispatchEvent(new Event('themeChanged'));
   };
 
   const switchTheme = async (themeName) => {
