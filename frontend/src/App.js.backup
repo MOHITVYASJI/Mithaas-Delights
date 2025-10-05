@@ -26,7 +26,6 @@ import { NotificationSystem } from "./components/NotificationSystem";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { VoiceChatBot } from "./components/VoiceChatBot";
 import { AdvertisementSection } from "./components/AdvertisementSection";
-import { HeaderLogo } from "./components/Logo";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
 
@@ -179,9 +178,17 @@ const Header = () => {
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <a href="/" className="flex items-center">
-            <HeaderLogo />
-          </a>
+          <div className="flex items-center space-x-2">
+            <div className="w-10 h-10 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center">
+              <span className="text-white font-bold text-lg">M</span>
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 bg-clip-text text-transparent">
+                Mithaas Delights
+              </h1>
+              <p className="text-xs text-gray-500">Premium Sweets & Snacks</p>
+            </div>
+          </div>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-6">

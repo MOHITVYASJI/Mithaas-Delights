@@ -50,24 +50,51 @@ const PREDEFINED_THEMES = {
 export const ThemeSwitcher = () => {
   const [activeTheme, setActiveTheme] = useState('default');
   const [customThemes, setCustomThemes] = useState([]);
+  const [userMode, setUserMode] = useState('light'); // light or dark
+  const [globalTheme, setGlobalTheme] = useState(null);
 
   useEffect(() => {
     loadActiveTheme();
     fetchCustomThemes();
+    loadUserThemePreference();
   }, []);
 
   const loadActiveTheme = async () => {
     try {
       const response = await axios.get(`${API}/themes/active`);
       const theme = response.data;
+      setGlobalTheme(theme);
       
-      // Apply theme colors
-      applyTheme(theme);
+      // Apply admin's global theme with user's mode preference
+      applyThemeWithMode(theme, userMode);
       setActiveTheme(theme.name || 'default');
     } catch (error) {
       console.error('Error loading theme:', error);
       // Apply default theme
-      applyTheme(PREDEFINED_THEMES.default);
+      applyThemeWithMode(PREDEFINED_THEMES.default, userMode);
+    }
+  };
+
+  const loadUserThemePreference = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // Not logged in, use localStorage
+        const savedMode = localStorage.getItem('user-theme-mode') || 'light';
+        setUserMode(savedMode);
+        return;
+      }
+
+      const response = await axios.get(`${API}/user/theme-preference`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const mode = response.data.theme_mode || 'light';
+      setUserMode(mode);
+      localStorage.setItem('user-theme-mode', mode);
+    } catch (error) {
+      console.error('Error loading user theme preference:', error);
+      const savedMode = localStorage.getItem('user-theme-mode') || 'light';
+      setUserMode(savedMode);
     }
   };
 
@@ -80,51 +107,75 @@ export const ThemeSwitcher = () => {
     }
   };
 
-  const applyTheme = (theme) => {
+  const applyThemeWithMode = (theme, mode) => {
     const root = document.documentElement;
     const body = document.body;
     
+    let themeColors;
     if (typeof theme === 'string') {
-      // Pre-defined theme
-      const predef = PREDEFINED_THEMES[theme];
-      if (predef) {
-        root.style.setProperty('--primary-color', predef.primary_color);
-        root.style.setProperty('--secondary-color', predef.secondary_color);
-        root.style.setProperty('--accent-color', predef.accent_color);
-        root.style.setProperty('--background-color', predef.background_color);
-        root.style.setProperty('--text-primary', predef.text_primary);
-        root.style.setProperty('--text-secondary', predef.text_secondary);
-        
-        // Apply to body background
-        if (theme === 'dark') {
-          body.style.backgroundColor = predef.background_color;
-          body.style.color = predef.text_primary;
-          root.classList.add('dark');
-        } else {
-          body.style.backgroundColor = predef.background_color;
-          body.style.color = predef.text_primary;
-          root.classList.remove('dark');
-        }
-      }
+      themeColors = PREDEFINED_THEMES[theme];
+    } else if (theme && theme.colors) {
+      themeColors = theme.colors;
     } else {
-      // Custom theme from backend
-      root.style.setProperty('--primary-color', theme.primary_color || PREDEFINED_THEMES.default.primary_color);
-      root.style.setProperty('--secondary-color', theme.secondary_color || PREDEFINED_THEMES.default.secondary_color);
-      root.style.setProperty('--accent-color', theme.accent_color || PREDEFINED_THEMES.default.accent_color);
-      root.style.setProperty('--background-color', theme.background_color || PREDEFINED_THEMES.default.background_color);
-      root.style.setProperty('--text-primary', theme.text_primary || PREDEFINED_THEMES.default.text_primary);
-      root.style.setProperty('--text-secondary', theme.text_secondary || PREDEFINED_THEMES.default.text_secondary);
-      
-      // Apply to body
-      body.style.backgroundColor = theme.background_color || PREDEFINED_THEMES.default.background_color;
-      body.style.color = theme.text_primary || PREDEFINED_THEMES.default.text_primary;
+      themeColors = PREDEFINED_THEMES.default;
     }
+    
+    // Get colors based on mode
+    let bgColor, textPrimary, textSecondary;
+    if (mode === 'dark') {
+      bgColor = '#111827';
+      textPrimary = '#f9fafb';
+      textSecondary = '#d1d5db';
+      root.classList.add('dark');
+    } else {
+      bgColor = themeColors.background || '#ffffff';
+      textPrimary = themeColors.text_primary || '#1f2937';
+      textSecondary = themeColors.text_secondary || '#6b7280';
+      root.classList.remove('dark');
+    }
+    
+    // Apply theme colors
+    root.style.setProperty('--primary-color', themeColors.primary || themeColors.primary_color || '#f97316');
+    root.style.setProperty('--secondary-color', themeColors.secondary || themeColors.secondary_color || '#f59e0b');
+    root.style.setProperty('--accent-color', themeColors.accent || themeColors.accent_color || '#ea580c');
+    root.style.setProperty('--background-color', bgColor);
+    root.style.setProperty('--text-primary', textPrimary);
+    root.style.setProperty('--text-secondary', textSecondary);
+    
+    // Apply to body
+    body.style.backgroundColor = bgColor;
+    body.style.color = textPrimary;
 
     // Save to localStorage
-    localStorage.setItem('active-theme', typeof theme === 'string' ? theme : theme.theme_name);
+    localStorage.setItem('active-theme', typeof theme === 'string' ? theme : (theme.name || 'default'));
+    localStorage.setItem('user-theme-mode', mode);
     
     // Force re-render by dispatching a custom event
     window.dispatchEvent(new Event('themeChanged'));
+  };
+
+  const toggleUserMode = async () => {
+    const newMode = userMode === 'light' ? 'dark' : 'light';
+    setUserMode(newMode);
+    
+    // Apply immediately
+    applyThemeWithMode(globalTheme || PREDEFINED_THEMES.default, newMode);
+    
+    // Save to backend if logged in
+    try {
+      const token = localStorage.getItem('token');
+      if (token) {
+        await axios.put(
+          `${API}/user/theme-preference`,
+          { theme_mode: newMode },
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      }
+      toast.success(`Switched to ${newMode} mode`);
+    } catch (error) {
+      console.error('Error saving theme preference:', error);
+      // Still works locally even if backend fails
+    }
   };
 
   const switchTheme = async (themeName) => {
@@ -148,7 +199,7 @@ export const ThemeSwitcher = () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        toast.error('Please login to change themes');
+        toast.error('Please login as admin to change global themes');
         return;
       }
       
@@ -158,11 +209,12 @@ export const ThemeSwitcher = () => {
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      loadActiveTheme();
-      toast.success('Theme activated successfully');
+      // Reload active theme with current user mode
+      await loadActiveTheme();
+      toast.success('Global theme activated successfully');
     } catch (error) {
       console.error('Error activating theme:', error);
-      toast.error('Failed to activate theme');
+      toast.error('Failed to activate theme. Admin access may be required.');
     }
   };
 
@@ -173,48 +225,44 @@ export const ThemeSwitcher = () => {
           <Palette className="w-5 h-5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-56">
-        <div className="px-2 py-1.5 text-sm font-semibold text-gray-700">Choose Theme</div>
-        
-        {/* Pre-defined Themes */}
-        {Object.entries(PREDEFINED_THEMES).map(([key, theme]) => (
-          <DropdownMenuItem
-            key={key}
-            onClick={() => switchTheme(key)}
-            className={`cursor-pointer ${activeTheme === key ? 'bg-orange-50' : ''}`}
-            data-testid={`theme-${key}`}
+      <DropdownMenuContent align="end" className="w-64">
+        {/* User Mode Toggle (Light/Dark) */}
+        <div className="px-2 py-2 border-b">
+          <div className="flex items-center justify-between mb-1">
+            <span className="text-sm font-semibold text-gray-700">Display Mode</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="w-full justify-between"
+            onClick={toggleUserMode}
+            data-testid="toggle-dark-mode"
           >
-            <div className="flex items-center gap-3 w-full">
-              <div
-                className="w-6 h-6 rounded-full border-2 border-gray-200"
-                style={{ backgroundColor: theme.primary_color }}
-              />
-              <span className="flex-1">{theme.name}</span>
-              {activeTheme === key && (
-                <span className="text-xs text-orange-600">✓</span>
-              )}
-            </div>
-          </DropdownMenuItem>
-        ))}
+            <span>{userMode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'}</span>
+            <span className="text-xs text-gray-500">Click to toggle</span>
+          </Button>
+        </div>
+
+        <div className="px-2 py-1.5 text-sm font-semibold text-gray-700">Active Theme: {activeTheme}</div>
 
         {/* Custom Themes from Admin */}
         {customThemes.length > 0 && (
           <>
-            <div className="px-2 py-1.5 text-sm font-semibold text-gray-700 border-t mt-2 pt-2">
-              Custom Themes
+            <div className="px-2 py-1 text-xs text-gray-500">
+              Admin Global Themes
             </div>
             {customThemes.map((theme) => (
               <DropdownMenuItem
                 key={theme.id}
                 onClick={() => switchToCustomTheme(theme.id)}
-                className={`cursor-pointer ${activeTheme === theme.theme_name ? 'bg-orange-50' : ''}`}
+                className={`cursor-pointer ${activeTheme === theme.name ? 'bg-orange-50' : ''}`}
               >
                 <div className="flex items-center gap-3 w-full">
                   <div
                     className="w-6 h-6 rounded-full border-2 border-gray-200"
-                    style={{ backgroundColor: theme.primary_color }}
+                    style={{ backgroundColor: theme.colors?.primary || '#f97316' }}
                   />
-                  <span className="flex-1">{theme.theme_name}</span>
+                  <span className="flex-1 text-sm">{theme.display_name || theme.name}</span>
                   {theme.is_active && (
                     <span className="text-xs text-orange-600">✓</span>
                   )}

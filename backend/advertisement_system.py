@@ -156,16 +156,22 @@ class AdvertisementManager:
         
         if active_only:
             filter_query["is_active"] = True
-            # Check date range
+            # Check date range - either no dates set or within valid date range
             now = datetime.now(timezone.utc).isoformat()
-            filter_query["$or"] = [
-                {"start_date": None},
-                {"start_date": {"$lte": now}}
+            filter_query["$and"] = [
+                {
+                    "$or": [
+                        {"start_date": None},
+                        {"start_date": {"$lte": now}}
+                    ]
+                },
+                {
+                    "$or": [
+                        {"end_date": None},
+                        {"end_date": {"$gte": now}}
+                    ]
+                }
             ]
-            filter_query["$or"].extend([
-                {"end_date": None},
-                {"end_date": {"$gte": now}}
-            ])
         
         ads = await self.advertisements.find(filter_query).sort("display_order", 1).to_list(length=None)
         return [Advertisement(**self._parse_from_mongo(ad)) for ad in ads]
