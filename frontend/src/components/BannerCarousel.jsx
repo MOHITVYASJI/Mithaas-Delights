@@ -21,7 +21,7 @@ export const BannerCarousel = () => {
     if (banners.length > 1 && isAutoRotating) {
       const interval = setInterval(() => {
         setCurrentIndex((prev) => (prev + 1) % banners.length);
-      }, 5000);
+      }, 2000);
 
       return () => clearInterval(interval);
     }

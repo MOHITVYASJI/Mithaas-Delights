@@ -3229,6 +3229,122 @@ async def init_admin():
         "email": admin_email,
         "password": "admin123"
     }
+# ==================== ADVERTISEMENT ROUTES ====================
+# Import advertisement manager
+from advertisement_system import AdvertisementManager, AdvertisementCreate, AdvertisementUpdate
+
+# Initialize Advertisement Manager
+advertisement_manager = AdvertisementManager(db)
+
+@api_router.get("/advertisements")
+async def get_advertisements(
+    active_only: bool = True,
+    placement: Optional[str] = None
+):
+    """Get advertisements"""
+    try:
+        ads = await advertisement_manager.get_advertisements(
+            placement=placement,
+            active_only=active_only
+        )
+        # Serialize before returning
+        return [serialize_mongo_document(ad.dict()) for ad in ads]
+    except Exception as e:
+        logger.error(f"Error fetching advertisements: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/advertisements")
+async def create_advertisement(
+    ad_data: AdvertisementCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create advertisement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        ad = await advertisement_manager.create_advertisement(ad_data)
+        return serialize_mongo_document(ad.dict())
+    except Exception as e:
+        logger.error(f"Error creating advertisement: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.put("/advertisements/{ad_id}")
+async def update_advertisement(
+    ad_id: str,
+    ad_data: AdvertisementUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update advertisement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        ad = await advertisement_manager.update_advertisement(ad_id, ad_data)
+        return serialize_mongo_document(ad.dict())
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating advertisement: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/advertisements/{ad_id}")
+async def delete_advertisement(
+    ad_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete advertisement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        success = await advertisement_manager.delete_advertisement(ad_id)
+        if success:
+            return {"message": "Advertisement deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Advertisement not found")
+    except Exception as e:
+        logger.error(f"Error deleting advertisement: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/advertisements/{ad_id}/impression")
+async def record_ad_impression(ad_id: str):
+    """Record advertisement impression"""
+    try:
+        await advertisement_manager.record_impression(ad_id)
+        return {"message": "Impression recorded"}
+    except Exception as e:
+        logger.error(f"Error recording impression: {str(e)}")
+        return {"message": "Failed to record impression"}
+
+@api_router.post("/advertisements/{ad_id}/click")
+async def record_ad_click(ad_id: str):
+    """Record advertisement click"""
+    try:
+        await advertisement_manager.record_click(ad_id)
+        return {"message": "Click recorded"}
+    except Exception as e:
+        logger.error(f"Error recording click: {str(e)}")
+        return {"message": "Failed to record click"}
+
+# ==================== NOTIFICATION BROADCAST ROUTE ====================
+
+@api_router.post("/notifications/{notification_id}/broadcast")
+async def broadcast_notification(
+    notification_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Broadcast notification to target audience (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        result = await notification_manager.broadcast_notification(notification_id)
+        return {
+            "message": "Notification broadcasted successfully",
+            "result": result
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error broadcasting notification: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # Mount the API router
 app.include_router(api_router)

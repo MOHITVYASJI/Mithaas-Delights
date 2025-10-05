@@ -27,6 +27,22 @@ export const AdvertisementSection = () => {
     }
   };
 
+  const recordImpression = async (adId) => {
+    try {
+      await axios.post(`${API}/advertisements/${adId}/impression`);
+    } catch (error) {
+      console.error('Error recording impression:', error);
+    }
+  };
+
+  const recordClick = async (adId) => {
+    try {
+      await axios.post(`${API}/advertisements/${adId}/click`);
+    } catch (error) {
+      console.error('Error recording click:', error);
+    }
+  };
+
   const dismissAd = (adId) => {
     const newDismissed = [...dismissedAds, adId];
     setDismissedAds(newDismissed);
@@ -59,12 +75,13 @@ export const AdvertisementSection = () => {
                 <X className="w-4 h-4" />
               </Button>
               
-              {ad.image_url && (
+              {ad.media_url && (
                 <div className="relative h-48 overflow-hidden">
                   <img
-                    src={ad.image_url}
+                    src={ad.media_url}
                     alt={ad.title}
                     className="w-full h-full object-cover"
+                    onLoad={() => recordImpression(ad.id)}
                   />
                 </div>
               )}
@@ -81,13 +98,16 @@ export const AdvertisementSection = () => {
                 {ad.description && (
                   <p className="text-gray-600 mb-4 line-clamp-3">{ad.description}</p>
                 )}
-                {ad.link_url && (
+                {ad.click_url && (
                   <Button
                     className="w-full bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
-                    onClick={() => window.location.href = ad.link_url}
+                    onClick={() => {
+                      recordClick(ad.id);
+                      window.location.href = ad.click_url;
+                    }}
                     data-testid="ad-cta-button"
                   >
-                    {ad.link_text || 'Learn More'}
+                    {ad.cta_text || 'Learn More'}
                   </Button>
                 )}
               </CardContent>

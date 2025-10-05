@@ -176,11 +176,13 @@ export const NotificationSystem = ({ isAuthenticated }) => {
                 <p>No notifications</p>
               </div>
             ) : (
-              notifications.map((notification) => (
+              notifications.map((notification) => {
+                const isRead = notification.user_status?.read_at != null;
+                return (
                 <div
                   key={notification.id}
                   className={`p-4 hover:bg-gray-50 transition-colors ${
-                    !notification.is_read ? 'bg-orange-50' : ''
+                    !isRead ? 'bg-orange-50' : ''
                   }`}
                   data-testid="notification-item"
                 >
@@ -188,7 +190,7 @@ export const NotificationSystem = ({ isAuthenticated }) => {
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
                         <h4 className="font-semibold text-sm">{notification.title}</h4>
-                        {!notification.is_read && (
+                        {!isRead && (
                           <div className="w-2 h-2 bg-orange-500 rounded-full"></div>
                         )}
                       </div>
@@ -197,7 +199,7 @@ export const NotificationSystem = ({ isAuthenticated }) => {
                         <span className="text-xs text-gray-400">
                           {new Date(notification.created_at).toLocaleDateString()}
                         </span>
-                        {!notification.is_read && (
+                        {!isRead && (
                           <button
                             onClick={() => markAsRead(notification.id)}
                             className="text-xs text-orange-600 hover:text-orange-700 font-medium"
@@ -215,14 +217,15 @@ export const NotificationSystem = ({ isAuthenticated }) => {
                     </button>
                   </div>
                 </div>
-              ))
+                );
+              })
             )}
           </div>
         </DropdownMenuContent>
       </DropdownMenu>
 
       {/* In-App Notification Toast */}
-      {notifications.length > 0 && !notifications[0].is_read && (
+      {notifications.length > 0 && !notifications[0].user_status?.read_at && (
         <div className="fixed bottom-4 right-4 z-50 max-w-sm" data-testid="notification-toast">
           <Card className="shadow-lg border-2 border-orange-200">
             <CardContent className="p-4">
