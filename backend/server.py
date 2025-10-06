@@ -2852,19 +2852,32 @@ async def initialize_default_themes(
 
 @api_router.get("/user/theme-preference")
 async def get_user_theme_preference(
-    credentials: HTTPAuthorizationCredentials = Security(security)
+    credentials: Optional[HTTPAuthorizationCredentials] = Security(security)
 ):
     """Get current user's theme preference (dark/light mode)"""
-    current_user = await get_current_user(credentials, db)
+    # If not authenticated, return default
+    if not credentials:
+        return {
+            "theme_mode": "light",
+            "available_modes": ["light", "dark"]
+        }
     
-    # Get user preference from database
-    user_data = await db.users.find_one({"id": current_user["id"]})
-    theme_mode = user_data.get("theme_mode", "light")  # default to light
-    
-    return {
-        "theme_mode": theme_mode,
-        "available_modes": ["light", "dark"]
-    }
+    try:
+        current_user = await get_current_user(credentials, db)
+        # Get user preference from database
+        user_data = await db.users.find_one({"id": current_user["id"]})
+        theme_mode = user_data.get("theme_mode", "light")  # default to light
+        
+        return {
+            "theme_mode": theme_mode,
+            "available_modes": ["light", "dark"]
+        }
+    except:
+        # If any error, return default
+        return {
+            "theme_mode": "light",
+            "available_modes": ["light", "dark"]
+        }
 
 @api_router.put("/user/theme-preference")
 async def update_user_theme_preference(
@@ -3083,6 +3096,24 @@ async def broadcast_notification(
     except Exception as e:
         logger.error(f"Error broadcasting notification: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/init-themes")
+async def init_themes():
+    """Initialize default themes - Public endpoint for easy setup"""
+    try:
+        # Initialize default themes
+        success = await theme_manager.initialize_default_themes()
+        
+        # Get count of themes
+        count = await db.themes.count_documents({})
+        
+        return {
+            "message": "Themes initialized successfully" if success else "Theme initialization completed",
+            "themes_count": count
+        }
+    except Exception as e:
+        logger.error(f"Error initializing themes: {str(e)}")
+        return {"message": f"Error: {str(e)}", "themes_count": 0}
 
 # Mount the API router
 app.include_router(api_router)

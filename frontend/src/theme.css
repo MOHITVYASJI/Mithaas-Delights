@@ -1,0 +1,272 @@
+/* 
+ * Comprehensive Theme System
+ * This CSS ensures themes affect the ENTIRE website
+ */
+
+/* CSS Variables for theme colors */
+:root {
+  /* Primary Colors */
+  --primary-color: #f97316;
+  --secondary-color: #f59e0b;
+  --accent-color: #ea580c;
+  
+  /* Background Colors */
+  --background-color: #ffffff;
+  --surface-color: #fff7ed;
+  --card-bg: #ffffff;
+  
+  /* Text Colors */
+  --text-primary: #1f2937;
+  --text-secondary: #6b7280;
+  --text-muted: #9ca3af;
+  
+  /* Border Colors */
+  --border-color: #fed7aa;
+  --border-light: #fef3c7;
+  
+  /* Status Colors */
+  --success-color: #10b981;
+  --warning-color: #f59e0b;
+  --error-color: #ef4444;
+  --info-color: #3b82f6;
+  
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+  --gradient-hero: linear-gradient(to bottom right, #fff7ed, #fef3c7, #fff7ed);
+}
+
+/* Dark Mode Variables */
+.dark,
+[data-theme="dark"] {
+  --background-color: #111827;
+  --surface-color: #1f2937;
+  --card-bg: #1f2937;
+  --text-primary: #f9fafb;
+  --text-secondary: #d1d5db;
+  --text-muted: #9ca3af;
+  --border-color: #374151;
+  --border-light: #4b5563;
+  --gradient-hero: linear-gradient(to bottom right, #111827, #1f2937, #111827);
+}
+
+/* Apply theme to body */
+body {
+  background-color: var(--background-color) !important;
+  color: var(--text-primary) !important;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Global element theming */
+* {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Headers and Navigation */
+header,
+nav {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-light) !important;
+}
+
+/* Sections */
+section {
+  background-color: var(--background-color) !important;
+  color: var(--text-primary) !important;
+}
+
+section.hero,
+section[id="home"] {
+  background: var(--gradient-hero) !important;
+}
+
+section.bg-white,
+section[class*="bg-white"] {
+  background-color: var(--card-bg) !important;
+}
+
+section.bg-gradient-to-br,
+section[class*="bg-gradient"] {
+  background: var(--gradient-hero) !important;
+}
+
+/* Cards */
+.card,
+[class*="Card"],
+div[class*="card"] {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Inputs and Forms */
+input,
+textarea,
+select {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted) !important;
+}
+
+/* Buttons - preserve primary button colors */
+button:not(.bg-orange-500):not(.bg-gradient-to-r):not([class*="bg-orange"]):not([class*="bg-red"]):not([class*="bg-green"]) {
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Dropdowns and Menus */
+[role="menu"],
+[class*="dropdown"],
+[class*="Menu"] {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Modals and Dialogs */
+[role="dialog"],
+[class*="modal"],
+[class*="Dialog"] {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Footer */
+footer {
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary) !important;
+}
+
+.dark footer {
+  background-color: #0f172a !important;
+}
+
+/* Text Colors */
+h1, h2, h3, h4, h5, h6 {
+  color: var(--text-primary) !important;
+}
+
+p, span, div, li, a {
+  color: var(--text-primary);
+}
+
+/* Specific text utility overrides */
+.text-gray-800,
+.text-gray-900 {
+  color: var(--text-primary) !important;
+}
+
+.text-gray-600,
+.text-gray-700 {
+  color: var(--text-secondary) !important;
+}
+
+.text-gray-400,
+.text-gray-500 {
+  color: var(--text-muted) !important;
+}
+
+/* Preserve brand colors */
+.text-orange-600,
+.text-orange-700,
+.text-orange-500,
+.bg-orange-500,
+.bg-orange-600,
+[class*="from-orange"],
+[class*="to-orange"],
+[class*="via-orange"] {
+  /* Keep as is - brand colors */
+}
+
+/* Borders */
+[class*="border-amber"],
+[class*="border-orange"] {
+  border-color: var(--border-color) !important;
+}
+
+/* Backgrounds that should adapt */
+.bg-gray-50,
+.bg-gray-100,
+[class*="bg-amber-50"],
+[class*="bg-orange-50"] {
+  background-color: var(--surface-color) !important;
+}
+
+/* Product Cards */
+[data-testid="product-card"],
+.product-card {
+  background-color: var(--card-bg) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* Contact Section */
+#contact,
+section[id="contact"] {
+  background-color: var(--background-color) !important;
+  color: var(--text-primary) !important;
+}
+
+#contact .card,
+#contact input,
+#contact textarea {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* About Section */
+#about,
+section[id="about"] {
+  background: var(--gradient-hero) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Products Section */
+#products,
+section[id="products"] {
+  background-color: var(--background-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Shadows - adjust for dark mode */
+.dark [class*="shadow"] {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Hover states */
+[class*="hover:bg-gray"]:hover,
+[class*="hover:bg-amber"]:hover {
+  background-color: var(--surface-color) !important;
+}
+
+/* Admin Panel */
+.admin-panel,
+[class*="admin"] {
+  background-color: var(--background-color) !important;
+  color: var(--text-primary) !important;
+}
+
+/* Preserve loading spinners */
+.animate-spin {
+  /* Keep as is */
+}
+
+/* Preserve badges with specific colors */
+.bg-red-500,
+.bg-green-500,
+.bg-blue-500,
+.bg-amber-500 {
+  /* Keep status colors as is */
+}
+
+/* Ensure backdrop */
+[class*="backdrop-blur"] {
+  background-color: var(--card-bg) !important;
+  opacity: 0.95;
+}

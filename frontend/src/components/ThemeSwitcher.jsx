@@ -1,51 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Palette } from 'lucide-react';
+import { Palette, Sun, Moon } from 'lucide-react';
 import { Button } from './ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from './ui/dropdown-menu';
 import { toast } from 'sonner';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
-
-// Pre-defined themes
-const PREDEFINED_THEMES = {
-  default: {
-    name: 'Default Orange',
-    theme_name: 'default',
-    primary_color: '#f97316',
-    secondary_color: '#f59e0b',
-    accent_color: '#ea580c',
-    background_color: '#fff7ed',
-    text_primary: '#1f2937',
-    text_secondary: '#6b7280'
-  },
-  light: {
-    name: 'Light Mode',
-    theme_name: 'light',
-    primary_color: '#f97316',
-    secondary_color: '#f59e0b',
-    accent_color: '#ea580c',
-    background_color: '#ffffff',
-    text_primary: '#1f2937',
-    text_secondary: '#6b7280'
-  },
-  dark: {
-    name: 'Dark Mode',
-    theme_name: 'dark',
-    primary_color: '#f97316',
-    secondary_color: '#f59e0b',
-    accent_color: '#ea580c',
-    background_color: '#111827',
-    text_primary: '#f9fafb',
-    text_secondary: '#d1d5db'
-  }
-};
 
 export const ThemeSwitcher = () => {
   const [activeTheme, setActiveTheme] = useState('default');
@@ -66,35 +33,40 @@ export const ThemeSwitcher = () => {
       setGlobalTheme(theme);
       
       // Apply admin's global theme with user's mode preference
-      applyThemeWithMode(theme, userMode);
-      setActiveTheme(theme.name || 'default');
+      const savedMode = localStorage.getItem('user-theme-mode') || 'light';
+      applyThemeWithMode(theme, savedMode);
+      setActiveTheme(theme.name || theme.display_name || 'default');
     } catch (error) {
       console.error('Error loading theme:', error);
       // Apply default theme
-      applyThemeWithMode(PREDEFINED_THEMES.default, userMode);
+      const savedMode = localStorage.getItem('user-theme-mode') || 'light';
+      applyDefaultTheme(savedMode);
     }
   };
 
   const loadUserThemePreference = async () => {
+    const savedMode = localStorage.getItem('user-theme-mode') || 'light';
+    setUserMode(savedMode);
+    
     try {
       const token = localStorage.getItem('token');
+      
       if (!token) {
-        // Not logged in, use localStorage
-        const savedMode = localStorage.getItem('user-theme-mode') || 'light';
-        setUserMode(savedMode);
         return;
       }
 
       const response = await axios.get(`${API}/user/theme-preference`, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      const mode = response.data.theme_mode || 'light';
-      setUserMode(mode);
-      localStorage.setItem('user-theme-mode', mode);
+      
+      if (response.data && response.data.theme_mode) {
+        const mode = response.data.theme_mode;
+        setUserMode(mode);
+        localStorage.setItem('user-theme-mode', mode);
+      }
     } catch (error) {
-      console.error('Error loading user theme preference:', error);
-      const savedMode = localStorage.getItem('user-theme-mode') || 'light';
-      setUserMode(savedMode);
+      // Silent fail - use localStorage value
+      console.log('Using local theme preference');
     }
   };
 
@@ -107,47 +79,88 @@ export const ThemeSwitcher = () => {
     }
   };
 
+  const applyDefaultTheme = (mode) => {
+    const defaultColors = {
+      primary: '#f97316',
+      secondary: '#f59e0b',
+      accent: '#ea580c',
+      background: '#ffffff',
+      surface: '#fff7ed',
+      text_primary: '#1f2937',
+      text_secondary: '#6b7280'
+    };
+    
+    applyThemeColors(defaultColors, mode);
+  };
+
   const applyThemeWithMode = (theme, mode) => {
+    let themeColors;
+    
+    if (theme && theme.colors) {
+      themeColors = theme.colors;
+    } else {
+      themeColors = {
+        primary: '#f97316',
+        secondary: '#f59e0b',
+        accent: '#ea580c',
+        background: '#ffffff',
+        surface: '#fff7ed',
+        text_primary: '#1f2937',
+        text_secondary: '#6b7280'
+      };
+    }
+    
+    applyThemeColors(themeColors, mode);
+  };
+
+  const applyThemeColors = (colors, mode) => {
     const root = document.documentElement;
     const body = document.body;
     
-    let themeColors;
-    if (typeof theme === 'string') {
-      themeColors = PREDEFINED_THEMES[theme];
-    } else if (theme && theme.colors) {
-      themeColors = theme.colors;
-    } else {
-      themeColors = PREDEFINED_THEMES.default;
-    }
-    
-    // Get colors based on mode
-    let bgColor, textPrimary, textSecondary;
+    // Apply dark/light mode class
     if (mode === 'dark') {
-      bgColor = '#111827';
-      textPrimary = '#f9fafb';
-      textSecondary = '#d1d5db';
       root.classList.add('dark');
+      root.setAttribute('data-theme', 'dark');
+      body.classList.add('dark');
+      
+      // Dark mode colors
+      root.style.setProperty('--background-color', '#111827');
+      root.style.setProperty('--surface-color', '#1f2937');
+      root.style.setProperty('--card-bg', '#1f2937');
+      root.style.setProperty('--text-primary', '#f9fafb');
+      root.style.setProperty('--text-secondary', '#d1d5db');
+      root.style.setProperty('--text-muted', '#9ca3af');
+      root.style.setProperty('--border-color', '#374151');
+      root.style.setProperty('--border-light', '#4b5563');
+      root.style.setProperty('--gradient-hero', 'linear-gradient(to bottom right, #111827, #1f2937, #111827)');
     } else {
-      bgColor = themeColors.background || '#ffffff';
-      textPrimary = themeColors.text_primary || '#1f2937';
-      textSecondary = themeColors.text_secondary || '#6b7280';
       root.classList.remove('dark');
+      root.removeAttribute('data-theme');
+      body.classList.remove('dark');
+      
+      // Light mode colors with theme colors
+      root.style.setProperty('--background-color', colors.background || '#ffffff');
+      root.style.setProperty('--surface-color', colors.surface || '#fff7ed');
+      root.style.setProperty('--card-bg', '#ffffff');
+      root.style.setProperty('--text-primary', colors.text_primary || '#1f2937');
+      root.style.setProperty('--text-secondary', colors.text_secondary || '#6b7280');
+      root.style.setProperty('--text-muted', '#9ca3af');
+      root.style.setProperty('--border-color', '#fed7aa');
+      root.style.setProperty('--border-light', '#fef3c7');
+      root.style.setProperty('--gradient-hero', 'linear-gradient(to bottom right, #fff7ed, #fef3c7, #fff7ed)');
     }
     
-    // Apply theme colors
-    root.style.setProperty('--primary-color', themeColors.primary || themeColors.primary_color || '#f97316');
-    root.style.setProperty('--secondary-color', themeColors.secondary || themeColors.secondary_color || '#f59e0b');
-    root.style.setProperty('--accent-color', themeColors.accent || themeColors.accent_color || '#ea580c');
-    root.style.setProperty('--background-color', bgColor);
-    root.style.setProperty('--text-primary', textPrimary);
-    root.style.setProperty('--text-secondary', textSecondary);
+    // Apply theme primary colors (work in both modes)
+    root.style.setProperty('--primary-color', colors.primary || '#f97316');
+    root.style.setProperty('--secondary-color', colors.secondary || '#f59e0b');
+    root.style.setProperty('--accent-color', colors.accent || '#ea580c');
+    root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${colors.primary || '#f97316'}, ${colors.secondary || '#f59e0b'})`);
     
     // Apply to body
-    body.style.backgroundColor = bgColor;
-    body.style.color = textPrimary;
+    body.style.backgroundColor = mode === 'dark' ? '#111827' : (colors.background || '#ffffff');
+    body.style.color = mode === 'dark' ? '#f9fafb' : (colors.text_primary || '#1f2937');
 
     // Save to localStorage
-    localStorage.setItem('active-theme', typeof theme === 'string' ? theme : (theme.name || 'default'));
     localStorage.setItem('user-theme-mode', mode);
     
     // Force re-render by dispatching a custom event
@@ -159,7 +172,7 @@ export const ThemeSwitcher = () => {
     setUserMode(newMode);
     
     // Apply immediately
-    applyThemeWithMode(globalTheme || PREDEFINED_THEMES.default, newMode);
+    applyThemeWithMode(globalTheme, newMode);
     
     // Save to backend if logged in
     try {
@@ -175,23 +188,7 @@ export const ThemeSwitcher = () => {
     } catch (error) {
       console.error('Error saving theme preference:', error);
       // Still works locally even if backend fails
-    }
-  };
-
-  const switchTheme = async (themeName) => {
-    try {
-      const predefTheme = PREDEFINED_THEMES[themeName];
-      if (predefTheme) {
-        applyTheme(themeName);
-        setActiveTheme(themeName);
-        toast.success(`Switched to ${predefTheme.name} theme`);
-        
-        // Optionally save to backend for persistence
-        // This would require creating a theme record or updating user preferences
-      }
-    } catch (error) {
-      console.error('Error switching theme:', error);
-      toast.error('Failed to switch theme');
+      toast.success(`Switched to ${newMode} mode`);
     }
   };
 
@@ -225,52 +222,84 @@ export const ThemeSwitcher = () => {
           <Palette className="w-5 h-5" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-64">
+      <DropdownMenuContent align="end" className="w-72">
         {/* User Mode Toggle (Light/Dark) */}
-        <div className="px-2 py-2 border-b">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-semibold text-gray-700">Display Mode</span>
+        <div className="px-3 py-3 border-b">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-semibold">Display Mode</span>
           </div>
           <Button
             variant="outline"
             size="sm"
-            className="w-full justify-between"
+            className="w-full justify-between hover:bg-orange-50"
             onClick={toggleUserMode}
             data-testid="toggle-dark-mode"
           >
-            <span>{userMode === 'light' ? '☀️ Light Mode' : '🌙 Dark Mode'}</span>
+            <span className="flex items-center gap-2">
+              {userMode === 'light' ? (
+                <>
+                  <Sun className="w-4 h-4 text-orange-500" />
+                  <span>Light Mode</span>
+                </>
+              ) : (
+                <>
+                  <Moon className="w-4 h-4 text-blue-400" />
+                  <span>Dark Mode</span>
+                </>
+              )}
+            </span>
             <span className="text-xs text-gray-500">Click to toggle</span>
           </Button>
         </div>
 
-        <div className="px-2 py-1.5 text-sm font-semibold text-gray-700">Active Theme: {activeTheme}</div>
+        <div className="px-3 py-2 text-sm">
+          <span className="font-semibold text-gray-700">Active Theme:</span>
+          <span className="ml-2 text-orange-600">{activeTheme}</span>
+        </div>
+
+        <DropdownMenuSeparator />
 
         {/* Custom Themes from Admin */}
         {customThemes.length > 0 && (
           <>
-            <div className="px-2 py-1 text-xs text-gray-500">
+            <div className="px-3 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
               Admin Global Themes
             </div>
             {customThemes.map((theme) => (
               <DropdownMenuItem
                 key={theme.id}
                 onClick={() => switchToCustomTheme(theme.id)}
-                className={`cursor-pointer ${activeTheme === theme.name ? 'bg-orange-50' : ''}`}
+                className={`cursor-pointer mx-2 rounded-md ${
+                  activeTheme === theme.name ? 'bg-orange-50' : ''
+                }`}
               >
-                <div className="flex items-center gap-3 w-full">
+                <div className="flex items-center gap-3 w-full py-1">
                   <div
-                    className="w-6 h-6 rounded-full border-2 border-gray-200"
-                    style={{ backgroundColor: theme.colors?.primary || '#f97316' }}
+                    className="w-8 h-8 rounded-full border-2 border-gray-200 shadow-sm flex-shrink-0"
+                    style={{ 
+                      background: `linear-gradient(135deg, ${theme.colors?.primary || '#f97316'}, ${theme.colors?.secondary || '#f59e0b'})`
+                    }}
                   />
-                  <span className="flex-1 text-sm">{theme.display_name || theme.name}</span>
+                  <div className="flex-1">
+                    <div className="text-sm font-medium">{theme.display_name || theme.name}</div>
+                    {theme.description && (
+                      <div className="text-xs text-gray-500">{theme.description}</div>
+                    )}
+                  </div>
                   {theme.is_active && (
-                    <span className="text-xs text-orange-600">✓</span>
+                    <span className="text-orange-600 font-bold">✓</span>
                   )}
                 </div>
               </DropdownMenuItem>
             ))}
           </>
         )}
+
+        <DropdownMenuSeparator />
+
+        <div className="px-3 py-2 text-xs text-gray-500">
+          Theme changes apply to the entire website instantly
+        </div>
       </DropdownMenuContent>
     </DropdownMenu>
   );

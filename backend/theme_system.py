@@ -61,12 +61,13 @@ DEFAULT_THEMES = {
             text_secondary="#6b7280",
             border="#fed7aa"  # orange-200
         ),
-        is_default=True
+        is_default=True,
+        is_active=True
     ),
     
     "festival_diwali": ThemeConfig(
         name="festival_diwali",
-        display_name="Diwali Festival",
+        display_name="🪔 Diwali Festival",
         description="Rich red and gold theme for Diwali celebrations",
         colors=ThemeColors(
             primary="#dc2626",  # red-600
@@ -84,23 +85,23 @@ DEFAULT_THEMES = {
     
     "modern_blue": ThemeConfig(
         name="modern_blue",
-        display_name="Modern Blue",
+        display_name="💙 Ocean Blue",
         description="Clean modern blue theme for contemporary look",
         colors=ThemeColors(
             primary="#3b82f6",  # blue-500
             secondary="#6366f1",  # indigo-500
             accent="#1d4ed8",  # blue-700
             background="#ffffff",
-            surface="#f8fafc",  # slate-50
+            surface="#f0f9ff",  # sky-50
             text_primary="#0f172a",  # slate-900
             text_secondary="#475569",  # slate-600
-            border="#cbd5e1"  # slate-300
+            border="#bfdbfe"  # blue-200
         )
     ),
     
     "elegant_purple": ThemeConfig(
         name="elegant_purple",
-        display_name="Elegant Purple",
+        display_name="💜 Royal Purple",
         description="Sophisticated purple theme for premium feel",
         colors=ThemeColors(
             primary="#8b5cf6",  # violet-500
@@ -110,13 +111,13 @@ DEFAULT_THEMES = {
             surface="#faf5ff",  # purple-50
             text_primary="#1f2937",
             text_secondary="#6b7280",
-            border="#c4b5fd"  # purple-300
+            border="#e9d5ff"  # purple-200
         )
     ),
     
     "green_natural": ThemeConfig(
         name="green_natural",
-        display_name="Natural Green",
+        display_name="🌿 Natural Green",
         description="Fresh green theme inspired by nature",
         colors=ThemeColors(
             primary="#10b981",  # emerald-500
@@ -127,6 +128,88 @@ DEFAULT_THEMES = {
             text_primary="#1f2937",
             text_secondary="#6b7280",
             border="#a7f3d0"  # emerald-200
+        )
+    ),
+    
+    "festival_holi": ThemeConfig(
+        name="festival_holi",
+        display_name="🌈 Holi Colors",
+        description="Vibrant multi-color theme for Holi celebrations",
+        colors=ThemeColors(
+            primary="#ec4899",  # pink-500
+            secondary="#8b5cf6",  # purple-500
+            accent="#f43f5e",  # rose-500
+            background="#ffffff",
+            surface="#fdf4ff",  # fuchsia-50
+            text_primary="#1f2937",
+            text_secondary="#6b7280",
+            border="#f9a8d4"  # pink-300
+        ),
+        festival_mode=True,
+        festival_name="Holi"
+    ),
+    
+    "royal_gold": ThemeConfig(
+        name="royal_gold",
+        display_name="👑 Royal Gold",
+        description="Luxurious gold theme for premium occasions",
+        colors=ThemeColors(
+            primary="#d97706",  # amber-600
+            secondary="#f59e0b",  # amber-500
+            accent="#b45309",  # amber-700
+            background="#ffffff",
+            surface="#fffbeb",  # amber-50
+            text_primary="#1f2937",
+            text_secondary="#6b7280",
+            border="#fde68a"  # amber-200
+        )
+    ),
+    
+    "rose_romance": ThemeConfig(
+        name="rose_romance",
+        display_name="🌹 Rose Romance",
+        description="Elegant rose pink theme for special occasions",
+        colors=ThemeColors(
+            primary="#f43f5e",  # rose-500
+            secondary="#fb7185",  # rose-400
+            accent="#e11d48",  # rose-600
+            background="#ffffff",
+            surface="#fff1f2",  # rose-50
+            text_primary="#1f2937",
+            text_secondary="#6b7280",
+            border="#fecdd3"  # rose-200
+        )
+    ),
+    
+    "sunset_orange": ThemeConfig(
+        name="sunset_orange",
+        display_name="🌅 Sunset Glow",
+        description="Warm sunset colors with orange and coral tones",
+        colors=ThemeColors(
+            primary="#fb923c",  # orange-400
+            secondary="#fbbf24",  # amber-400
+            accent="#f97316",  # orange-500
+            background="#ffffff",
+            surface="#fff7ed",  # orange-50
+            text_primary="#1f2937",
+            text_secondary="#6b7280",
+            border="#fed7aa"  # orange-200
+        )
+    ),
+    
+    "mint_fresh": ThemeConfig(
+        name="mint_fresh",
+        display_name="🌊 Mint Fresh",
+        description="Cool mint and teal theme for refreshing feel",
+        colors=ThemeColors(
+            primary="#14b8a6",  # teal-500
+            secondary="#06b6d4",  # cyan-500
+            accent="#0d9488",  # teal-600
+            background="#ffffff",
+            surface="#f0fdfa",  # teal-50
+            text_primary="#1f2937",
+            text_secondary="#6b7280",
+            border="#99f6e4"  # teal-200
         )
     )
 }
