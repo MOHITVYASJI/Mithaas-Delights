@@ -113,6 +113,20 @@ export const ThemeSwitcher = () => {
     applyThemeColors(themeColors, mode);
   };
 
+  // Helper function to calculate contrast and adjust colors automatically
+  const getContrastColor = (backgroundColor) => {
+    // Convert hex to RGB
+    const hex = backgroundColor.replace('#', '');
+    const r = parseInt(hex.substr(0, 2), 16);
+    const g = parseInt(hex.substr(2, 2), 16);
+    const b = parseInt(hex.substr(4, 2), 16);
+    
+    // Calculate luminance
+    const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    
+    // Return high contrast color
+    return luminance > 0.5 ? '#1f2937' : '#f9fafb';
+  };
   const applyThemeColors = (colors, mode) => {
     const root = document.documentElement;
     const body = document.body;
@@ -123,48 +137,72 @@ export const ThemeSwitcher = () => {
       root.setAttribute('data-theme', 'dark');
       body.classList.add('dark');
       
-      // Dark mode colors
-      root.style.setProperty('--background-color', '#111827');
-      root.style.setProperty('--surface-color', '#1f2937');
-      root.style.setProperty('--card-bg', '#1f2937');
+      // Dark mode colors with auto-contrast
+      const darkBg = '#111827';
+      const darkSurface = '#1f2937';
+      
+      root.style.setProperty('--background-color', darkBg);
+      root.style.setProperty('--surface-color', darkSurface);
+      root.style.setProperty('--card-bg', darkSurface);
       root.style.setProperty('--text-primary', '#f9fafb');
       root.style.setProperty('--text-secondary', '#d1d5db');
       root.style.setProperty('--text-muted', '#9ca3af');
       root.style.setProperty('--border-color', '#374151');
       root.style.setProperty('--border-light', '#4b5563');
-      root.style.setProperty('--gradient-hero', 'linear-gradient(to bottom right, #111827, #1f2937, #111827)');
+      root.style.setProperty('--gradient-hero', `linear-gradient(to bottom right, ${darkBg}, ${darkSurface}, ${darkBg})`);
     } else {
       root.classList.remove('dark');
       root.removeAttribute('data-theme');
       body.classList.remove('dark');
       
-      // Light mode colors with theme colors
-      root.style.setProperty('--background-color', colors.background || '#ffffff');
-      root.style.setProperty('--surface-color', colors.surface || '#fff7ed');
+      // Light mode colors with theme colors and auto-contrast
+      const lightBg = colors.background || '#ffffff';
+      const lightSurface = colors.surface || '#fff7ed';
+      
+      // Auto-calculate contrasting text colors
+      const autoTextPrimary = colors.text_primary || getContrastColor(lightBg);
+      const autoTextSecondary = colors.text_secondary || getContrastColor(lightSurface);
+      
+      root.style.setProperty('--background-color', lightBg);
+      root.style.setProperty('--surface-color', lightSurface);
       root.style.setProperty('--card-bg', '#ffffff');
-      root.style.setProperty('--text-primary', colors.text_primary || '#1f2937');
-      root.style.setProperty('--text-secondary', colors.text_secondary || '#6b7280');
+      root.style.setProperty('--text-primary', autoTextPrimary);
+      root.style.setProperty('--text-secondary', autoTextSecondary);
       root.style.setProperty('--text-muted', '#9ca3af');
-      root.style.setProperty('--border-color', '#fed7aa');
+      root.style.setProperty('--border-color', colors.border || '#fed7aa');
       root.style.setProperty('--border-light', '#fef3c7');
-      root.style.setProperty('--gradient-hero', 'linear-gradient(to bottom right, #fff7ed, #fef3c7, #fff7ed)');
+      root.style.setProperty('--gradient-hero', `linear-gradient(to bottom right, ${lightSurface}, #fef3c7, ${lightSurface})`);
     }
     
-    // Apply theme primary colors (work in both modes)
-    root.style.setProperty('--primary-color', colors.primary || '#f97316');
-    root.style.setProperty('--secondary-color', colors.secondary || '#f59e0b');
-    root.style.setProperty('--accent-color', colors.accent || '#ea580c');
-    root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${colors.primary || '#f97316'}, ${colors.secondary || '#f59e0b'})`);
+    // Apply theme primary colors (work in both modes) with contrast text
+    const primaryColor = colors.primary || '#f97316';
+    const secondaryColor = colors.secondary || '#f59e0b';
+    const accentColor = colors.accent || '#ea580c';
+    
+    root.style.setProperty('--primary-color', primaryColor);
+    root.style.setProperty('--secondary-color', secondaryColor);
+    root.style.setProperty('--accent-color', accentColor);
+    root.style.setProperty('--gradient-primary', `linear-gradient(135deg, ${primaryColor}, ${secondaryColor})`);
+    
+    // Auto-contrast text for buttons and interactive elements
+    root.style.setProperty('--primary-text', getContrastColor(primaryColor));
+    root.style.setProperty('--secondary-text', getContrastColor(secondaryColor));
+    root.style.setProperty('--accent-text', getContrastColor(accentColor));
     
     // Apply to body
     body.style.backgroundColor = mode === 'dark' ? '#111827' : (colors.background || '#ffffff');
-    body.style.color = mode === 'dark' ? '#f9fafb' : (colors.text_primary || '#1f2937');
+    body.style.color = mode === 'dark' ? '#f9fafb' : (colors.text_primary || getContrastColor(colors.background || '#ffffff'));
 
     // Save to localStorage
     localStorage.setItem('user-theme-mode', mode);
     
     // Force re-render by dispatching a custom event
     window.dispatchEvent(new Event('themeChanged'));
+    
+    // Broadcast theme change to other components
+    window.dispatchEvent(new CustomEvent('globalThemeUpdate', { 
+      detail: { colors, mode, timestamp: Date.now() } 
+    }));
   };
 
   const toggleUserMode = async () => {

@@ -6,9 +6,31 @@ from datetime import datetime, timezone
 from typing import List, Optional, Dict, Any
 from pydantic import BaseModel, Field
 from motor.motor_asyncio import AsyncIOMotorCollection
+from bson import ObjectId
 import logging
 
 logger = logging.getLogger(__name__)
+
+# Helper function to convert MongoDB ObjectId to string for JSON serialization
+def serialize_mongo_document(doc):
+    """Convert MongoDB document to JSON-serializable dict by converting ObjectId to string"""
+    if doc is None:
+        return None
+    if isinstance(doc, list):
+        return [serialize_mongo_document(item) for item in doc]
+    if isinstance(doc, dict):
+        serialized = {}
+        for key, value in doc.items():
+            if isinstance(value, ObjectId):
+                serialized[key] = str(value)
+            elif isinstance(value, dict):
+                serialized[key] = serialize_mongo_document(value)
+            elif isinstance(value, list):
+                serialized[key] = serialize_mongo_document(value)
+            else:
+                serialized[key] = value
+        return serialized
+    return doc
 
 # Notification Models
 class NotificationType:
@@ -166,8 +188,12 @@ class NotificationManager:
                 None
             )
             if notification:
-                notification_data = self._parse_from_mongo(notification)
-                notification_data["user_status"] = self._parse_from_mongo(status)
+                # First serialize ObjectId fields, then parse dates
+                notification_serialized = serialize_mongo_document(notification)
+                status_serialized = serialize_mongo_document(status)
+                
+                notification_data = self._parse_from_mongo(notification_serialized)
+                notification_data["user_status"] = self._parse_from_mongo(status_serialized)
                 result.append(notification_data)
         
         return result

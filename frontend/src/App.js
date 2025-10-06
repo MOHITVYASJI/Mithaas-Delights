@@ -616,7 +616,7 @@ const HeroSection = () => {
           <div className="relative">
             <div className="relative rounded-2xl overflow-hidden shadow-2xl">
               <img 
-                src="/Premium_mithai.png"
+                src="/mithaas_delights.png"
                 alt="Premium Indian Sweets"
                 className="w-full h-96 lg:h-[500px] object-cover"
               />
@@ -774,24 +774,24 @@ const AboutSection = () => {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-4">
               <img 
-                src="https://lh3.googleusercontent.com/gg/AAHar4cFdaQc-K1pKHWOLD44h9jHoYa7m5N_R6oDbsPIFn4WSEOSqvcTkt61AYNQUW5bnUUbvJVaWLCvkRqh2UBrcP0cFsqAeJHyl9FUFK7DWd3jM86hCMn1Y6-ofPRLIMW5JwKTGGg2sG0c369sOvWCtjP0RmbflspHLapvEf5UvxjZpLeANvHaT-ggF_uNomK1IHTDjaNYB6-eM-uXtq6A0SidHAyVZdG8JUXrwpn5VqnYyKVN6H5JSEhL6rZbWM-JILbctYCT0qCfCxb579B4mkVNhj3LBCFoLRsnrj5RA5E0SMLp_ouLmFTe65AmdNOdK1CkGKqSh6wTHoclYlvFnLtq=s1024"
+                src="/Traditional_mithaai.png"
                 alt="Traditional sweet making"
                 className="rounded-lg shadow-md"
               />
               <img 
-                src="https://lh3.googleusercontent.com/gg-dl/AJfQ9KTh9gCdVMwkvObt7am5S_JwcYSqOHIqxhv0PINvV1fVYmm9lp3xd5kzXfwoeHHQo40XAA0xeoWCfpS6azXz6LrFhk3WYhw17nzC_uw6S7Y8dbLOl4-0PkF4SL5eZ-8e7zwACJaZedBD0stqObrpCRSjViMontbAsN-XBUrimD0Zuw0CZw=s1024"
+                src="/Premium_sweets.png"
                 alt="Premium ingredients"
                 className="rounded-lg shadow-md"
               />
             </div>
             <div className="space-y-4 mt-8">
               <img 
-                src="https://lh3.googleusercontent.com/gg/AAHar4e6yrcbXa60SQNMLkX1cHkFbu7iUSFpHWKgS6zW6UCv3c_v5DvxaP3cHqbKpj7fIbw_D_JW4wb-2vke8ZWUEkKxhuPsDlqo1V3buyFSWCWMrUoOrLtTEnuSObiWoB41llrFW4lSeufINs-CjztOPbrRHHWwgB-Rz0bqvkugYn58-2B69LRgaKBkkyTKv4Nr9f-EklU96i4KvKDms46tvcBiiYVCfT9w0eJSlmLfXnV-j5oCROe7qwDBnQtv0HJT8newVslw6T3mDOwXf_tLVYYcBVR5uco91HLh9hMFqq08TVyXMaQcL03r1GMmfdFiLOQneetFKUkdWY14z0-q7602=s1024"
+                src="hand_sweets.png"
                 alt="Handcrafted sweets"
                 className="rounded-lg shadow-md"
               />
               <img 
-                src="https://lh3.googleusercontent.com/gg/AAHar4eafvtf5YSBhFxQEokS0adf8l2czmhsCLz8GHdaeoqRaEd4G2rTBmS6qE2NzAB50OTmf1QK74zgAKQQhhRO6Bu3EG97_gJVUHBrGZI3546SoGDxw0uLpCj4bf81vJh24vWKOg17kd8Vq5Y0rS91lXJo22ifdoMVfF8qQlMc3H1aig-gBRDPhKXP15TFCJDTT0mX0yur1X1xnapF2tw_8B_pfZXtbR3tZwxlzG9o3Si6N2yfXxsPwINk1kVAY9FyKZKmdEgPu8v5Hag4e119XDTV21BSY_h3uHhZpP1naB3WhHUlaGip8_NyXPZu5tTE0LSPKaEmgICNGjD5gL_KZzp8=s1024"
+                src="food_safty.png"
                 alt="Quality testing"
                 className="rounded-lg shadow-md"
               />
