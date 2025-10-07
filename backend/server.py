@@ -82,20 +82,50 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Startup event to initialize default categories
+@app.on_event("startup")
+async def startup_event():
+    """Initialize default categories and themes on startup if not present"""
+    try:
+        # Initialize categories if empty
+        category_count = await db.categories.count_documents({})
+        if category_count == 0:
+            default_categories = [
+                {"name": "mithai", "description": "Traditional Indian sweets", "display_order": 1},
+                {"name": "namkeen", "description": "Savory snacks and treats", "display_order": 2},
+                {"name": "farsan", "description": "Gujarati farsan specialties", "display_order": 3},
+                {"name": "bengali_sweets", "description": "Bengali sweet delicacies", "display_order": 4},
+                {"name": "dry_fruit_sweets", "description": "Premium dry fruit sweets", "display_order": 5},
+                {"name": "laddu", "description": "Various types of laddus", "display_order": 6},
+                {"name": "festival_special", "description": "Special festival items", "display_order": 7}
+            ]
+            
+            from datetime import datetime, timezone
+            categories_to_insert = []
+            for cat_data in default_categories:
+                cat_data['id'] = str(uuid.uuid4())
+                cat_data['is_active'] = True
+                cat_data['created_at'] = datetime.now(timezone.utc).isoformat()
+                cat_data['updated_at'] = datetime.now(timezone.utc).isoformat()
+                categories_to_insert.append(cat_data)
+            
+            await db.categories.insert_many(categories_to_insert)
+            logger.info(f"✅ Auto-initialized {len(categories_to_insert)} default categories")
+        
+        # Initialize themes
+        await theme_manager.initialize_default_themes()
+        logger.info("✅ Theme system initialized")
+        
+    except Exception as e:
+        logger.error(f"Error during startup initialization: {str(e)}")
+
 # Create a router with the /api prefix
 api_router = APIRouter(prefix="/api")
 
 security = HTTPBearer(auto_error=False)
 
 # Enums
-class ProductCategory(str, Enum):
-    MITHAI = "mithai"
-    NAMKEEN = "namkeen"
-    FARSAN = "farsan"
-    BENGALI_SWEETS = "bengali_sweets"
-    DRY_FRUIT_SWEETS = "dry_fruit_sweets"
-    LADDU = "laddu"
-    FESTIVAL_SPECIAL = "festival_special"
+# ProductCategory enum removed - now using dynamic categories from database
 
 class OrderStatus(str, Enum):
     PENDING = "pending"
@@ -128,7 +158,7 @@ class Product(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     name: str
     description: str
-    category: ProductCategory
+    category: str
     variants: List[ProductVariant] = []  # New: Multiple variants
     media_gallery: List[str] = []  # New: Multiple images/videos
     image_url: str  # Keep for backward compatibility
@@ -145,7 +175,7 @@ class Product(BaseModel):
 class ProductCreate(BaseModel):
     name: str
     description: str
-    category: ProductCategory
+    category: str
     variants: List[ProductVariant]
     media_gallery: List[str] = []
     image_url: str
@@ -563,7 +593,7 @@ async def health_check():
 
 @api_router.get("/products", response_model=List[Product])
 async def get_products(
-    category: Optional[ProductCategory] = None,
+    category: Optional[str] = None,
     search: Optional[str] = None,
     featured_only: bool = False
 ):
@@ -618,13 +648,23 @@ async def create_product(
     product: ProductCreate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Create a new product (Admin only) - FIXED: Prevents duplicates"""
+    """Create a new product (Admin only) - FIXED: Prevents duplicates and validates category"""
     await get_current_admin_user(credentials, db)
     
     # Check if product with same name already exists
     existing_product = await db.products.find_one({"name": product.name})
     if existing_product:
         raise HTTPException(status_code=400, detail="Product with this name already exists")
+    
+    # Validate category exists in database (only if categories are initialized)
+    category_count = await db.categories.count_documents({})
+    if category_count > 0:
+        category_exists = await db.categories.find_one({"name": product.category, "is_active": True})
+        if not category_exists:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Category '{product.category}' does not exist or is not active. Please create the category first."
+            )
     
     product_dict = product.dict()
     product_obj = Product(**product_dict)
@@ -644,13 +684,25 @@ async def update_product(
     product_update: ProductCreate,
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Update a product (Admin only)"""
+    """Update a product (Admin only) - validates category"""
     await get_current_admin_user(credentials, db)
     
     # Get old product to check for removed variants
     old_product = await db.products.find_one({"id": product_id})
     if not old_product:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    # Validate category exists in database
+    # Check if categories collection has any entries
+    category_count = await db.categories.count_documents({})
+    if category_count > 0:
+        # Only validate if categories are set up
+        category_exists = await db.categories.find_one({"name": product_update.category, "is_active": True})
+        if not category_exists:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Category '{product_update.category}' does not exist or is not active. Please create the category first."
+            )
     
     # Prepare update
     product_dict = product_update.dict()
@@ -820,15 +872,15 @@ async def delete_category(
 async def init_default_categories(
     credentials: HTTPAuthorizationCredentials = Security(security)
 ):
-    """Initialize default categories from enum (Admin only)"""
+    """Initialize default categories and migrate existing products (Admin only)"""
     await get_current_admin_user(credentials, db)
     
     # Check if categories already exist
     existing_count = await db.categories.count_documents({})
     if existing_count > 0:
-        raise HTTPException(status_code=400, detail="Categories already initialized")
+        return {"message": "Categories already initialized", "count": existing_count}
     
-    # Create default categories from ProductCategory enum
+    # Create default categories (previously from ProductCategory enum)
     default_categories = [
         {"name": "mithai", "description": "Traditional Indian sweets", "display_order": 1},
         {"name": "namkeen", "description": "Savory snacks and treats", "display_order": 2},
@@ -846,7 +898,12 @@ async def init_default_categories(
     
     await db.categories.insert_many(categories_to_insert)
     
-    return {"message": f"Initialized {len(categories_to_insert)} default categories"}
+    logger.info(f"Initialized {len(categories_to_insert)} default categories")
+    
+    return {
+        "message": f"Initialized {len(categories_to_insert)} default categories",
+        "categories": [cat["name"] for cat in default_categories]
+    }
 
 # ==================== CART ROUTES ====================
 
