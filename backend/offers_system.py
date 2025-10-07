@@ -146,6 +146,14 @@ class OfferManager:
         # Filter by product or category
         if product_id or category:
             or_conditions = []
+            # Include global offers (empty arrays for both product and category targeting)
+            or_conditions.append({
+                "$and": [
+                    {"applicable_product_ids": {"$size": 0}},
+                    {"category_names": {"$size": 0}}
+                ]
+            })
+            
             if product_id:
                 or_conditions.append({"applicable_product_ids": product_id})
             if category:
