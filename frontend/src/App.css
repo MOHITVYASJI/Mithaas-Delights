@@ -287,6 +287,39 @@ html {
 }
 
 /* Responsive utilities */
+.desktop-nav {
+  display: none !important;
+  align-items: center;
+  gap: 1.5rem;
+}
+
+.mobile-menu-btn {
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+}
+
+@media (min-width: 768px) {
+  .desktop-nav {
+    display: flex !important;
+  }
+  
+  .mobile-menu-btn {
+    display: none !important;
+  }
+}
+
+/* Force mobile responsiveness */
+@media (max-width: 767px) {
+  .desktop-nav {
+    display: none !important;
+  }
+  
+  .mobile-menu-btn {
+    display: flex !important;
+  }
+}
+
 @media (max-width: 768px) {
   .mobile-padding {
     padding-left: 1rem;

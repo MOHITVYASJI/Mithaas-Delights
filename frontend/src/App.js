@@ -142,8 +142,31 @@ const Header = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [searchLoading, setSearchLoading] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
   const { cartCount } = useCart();
   const { user, logout, isAuthenticated, loading } = useAuth();
+
+  // Handle window resize for responsive behavior
+  useEffect(() => {
+    const checkMobile = () => {
+      const mobile = window.innerWidth < 768;
+      console.log('Screen width:', window.innerWidth, 'Mobile:', mobile);
+      setIsMobile(mobile);
+      if (!mobile) {
+        setIsMenuOpen(false); // Close mobile menu on desktop
+      }
+    };
+    
+    // Check on mount with delay to ensure DOM is ready
+    setTimeout(checkMobile, 100);
+
+    const handleResize = () => {
+      checkMobile();
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   const handleAuthClick = (mode) => {
     setAuthMode(mode);
@@ -183,8 +206,8 @@ const Header = () => {
             <HeaderLogo />
           </a>
 
-          {/* Desktop Navigation */}
-          <nav className="hidden md:flex items-center space-x-6">
+          {/* Desktop Navigation - Force hide on mobile */}
+          <nav className="desktop-nav" style={{display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: '1.5rem'}}>
             <a href="/" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
             <a href="/#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
             <a href="/bulk-orders" className="text-gray-700 hover:text-orange-600 transition-colors">Bulk Orders</a>
@@ -334,10 +357,12 @@ const Header = () => {
               </Button>
             </CartDialog>
             
+            {/* Mobile Menu Button - Force show on mobile */}
             <Button
               variant="ghost"
               size="sm"
-              className="md:hidden"
+              className="mobile-menu-btn"
+              style={{display: isMobile ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center'}}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               data-testid="mobile-menu-button"
             >
@@ -348,7 +373,7 @@ const Header = () => {
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <nav className="md:hidden mt-4 pb-4 border-t border-amber-100 pt-4">
+          <nav className="mt-4 pb-4 border-t border-amber-100 pt-4">
             <div className="flex flex-col space-y-3">
               <a href="#home" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
               <a href="#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
