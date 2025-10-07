@@ -62,6 +62,11 @@ export const ProductDetailPage = ({ Header, Footer }) => {
   };
 
   const handleAddToCart = () => {
+    if (product.is_sold_out) {
+      toast.error('This product is currently out of stock');
+      return;
+    }
+
     if (!selectedVariant) {
       toast.error('Please select a variant');
       return;
@@ -308,16 +313,33 @@ export const ProductDetailPage = ({ Header, Footer }) => {
               </div>
             </div>
 
+            {/* Sold Out Message */}
+            {product.is_sold_out && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-6" data-testid="sold-out-message">
+                <div className="flex items-center space-x-2">
+                  <Badge className="bg-red-600 text-white">SOLD OUT</Badge>
+                  <p className="text-red-700 font-medium">Currently Unavailable</p>
+                </div>
+                <p className="text-red-600 text-sm mt-2">
+                  This product is currently out of stock. Please check back later or contact us for availability.
+                </p>
+              </div>
+            )}
+
             {/* Action Buttons */}
             <div className="flex flex-col sm:flex-row gap-4 mb-6">
               <Button
                 onClick={handleAddToCart}
                 disabled={product.is_sold_out || !selectedVariant}
-                className="flex-1 bg-orange-500 hover:bg-orange-600 text-white py-6 text-lg"
+                className={`flex-1 py-6 text-lg ${
+                  product.is_sold_out 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                    : 'bg-orange-500 hover:bg-orange-600 text-white'
+                }`}
                 data-testid="add-to-cart-detail"
               >
                 <ShoppingCart className="w-5 h-5 mr-2" />
-                Add to Cart
+                {product.is_sold_out ? 'Out of Stock' : 'Add to Cart'}
               </Button>
               <Button
                 variant="outline"

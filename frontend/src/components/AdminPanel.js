@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Edit, Trash2, Eye, Package, Users, BarChart, Settings, Star, Check, X, MessageSquare, Palette, Play } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Package, Users, BarChart, Settings, Star, Check, X, MessageSquare, Palette, Play, Folder } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -109,7 +109,7 @@ export const AdminPanel = () => {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-8 gap-2">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9 gap-2">
             <TabsTrigger value="dashboard" data-testid="dashboard-tab">
               <BarChart className="w-4 h-4 mr-2" />
               Dashboard
@@ -117,6 +117,10 @@ export const AdminPanel = () => {
             <TabsTrigger value="products" data-testid="products-tab">
               <Package className="w-4 h-4 mr-2" />
               Products
+            </TabsTrigger>
+            <TabsTrigger value="categories" data-testid="categories-tab">
+              <Folder className="w-4 h-4 mr-2" />
+              Categories
             </TabsTrigger>
             <TabsTrigger value="orders" data-testid="orders-tab">
               <Eye className="w-4 h-4 mr-2" />
@@ -150,6 +154,9 @@ export const AdminPanel = () => {
 
           <TabsContent value="products">
             <ProductManagement products={products} fetchProducts={fetchProducts} />
+          </TabsContent>
+          <TabsContent value="categories">
+            <CategoryManagement />
           </TabsContent>
 
           <TabsContent value="orders">
@@ -431,6 +438,26 @@ const ProductForm = ({ product, onSuccess }) => {
   });
 
   const [submitting, setSubmitting] = useState(false);
+  const [categories, setCategories] = useState([]);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${API}/categories?active_only=true`);
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      // Fallback to default categories if API fails
+      setCategories([
+        { id: '1', name: 'mithai' },
+        { id: '2', name: 'namkeen' },
+        { id: '3', name: 'laddu' }
+      ]);
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -520,13 +547,19 @@ const ProductForm = ({ product, onSuccess }) => {
               <SelectValue placeholder="Select category" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="mithai">Mithai</SelectItem>
-              <SelectItem value="namkeen">Namkeen</SelectItem>
-              <SelectItem value="laddu">Laddu</SelectItem>
-              <SelectItem value="bengali_sweets">Bengali Sweets</SelectItem>
-              <SelectItem value="dry_fruit_sweets">Dry Fruit Sweets</SelectItem>
-              <SelectItem value="farsan">Farsan</SelectItem>
-              <SelectItem value="festival_special">Festival Special</SelectItem>
+              {categories.length > 0 ? (
+                categories.map((category) => (
+                  <SelectItem key={category.id} value={category.name}>
+                    {category.name.charAt(0).toUpperCase() + category.name.slice(1).replace(/_/g, ' ')}
+                  </SelectItem>
+                ))
+              ) : (
+                <>
+                  <SelectItem value="mithai">Mithai</SelectItem>
+                  <SelectItem value="namkeen">Namkeen</SelectItem>
+                  <SelectItem value="laddu">Laddu</SelectItem>
+                </>
+              )}
             </SelectContent>
           </Select>
         </div>
@@ -687,6 +720,254 @@ const ProductForm = ({ product, onSuccess }) => {
   );
 };
 
+// Category Management Component
+const CategoryManagement = () => {
+  const [categories, setCategories] = useState([]);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editCategory, setEditCategory] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/categories`, {
+        headers: getAuthHeaders()
+      });
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      toast.error('Failed to fetch categories');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteCategory = async (categoryId) => {
+    if (window.confirm('Are you sure you want to delete this category?')) {
+      try {
+        await axios.delete(`${API}/categories/${categoryId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Category deleted successfully');
+        fetchCategories();
+      } catch (error) {
+        toast.error('Failed to delete category');
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Category Management</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-orange-500 hover:bg-orange-600" data-testid="add-category-button">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Category
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add New Category</DialogTitle>
+            </DialogHeader>
+            <CategoryForm onSuccess={() => {
+              setIsAddDialogOpen(false);
+              fetchCategories();
+            }} />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {categories.map((category) => (
+            <Card key={category.id} className="overflow-hidden" data-testid="category-card">
+              <div className="relative">
+                {category.image_url && (
+                  <img 
+                    src={category.image_url} 
+                    alt={category.name}
+                    className="w-full h-32 object-cover"
+                  />
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
+                <div className="absolute bottom-2 left-2 text-white">
+                  <h3 className="font-semibold text-lg">{category.name}</h3>
+                </div>
+              </div>
+              <CardContent className="p-4">
+                <p className="text-gray-600 text-sm mb-3">{category.description}</p>
+                <div className="flex items-center justify-between mb-3">
+                  <Badge variant={category.is_active ? 'default' : 'secondary'}>
+                    {category.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                  <span className="text-sm text-gray-500">
+                    {category.product_count || 0} products
+                  </span>
+                </div>
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => setEditCategory(category)}
+                    data-testid="edit-category-button"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleDeleteCategory(category.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Edit Category Dialog */}
+      <Dialog open={!!editCategory} onOpenChange={() => setEditCategory(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Category</DialogTitle>
+          </DialogHeader>
+          {editCategory && (
+            <CategoryForm 
+              category={editCategory}
+              onSuccess={() => {
+                setEditCategory(null);
+                fetchCategories();
+              }} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Category Form Component
+const CategoryForm = ({ category, onSuccess }) => {
+  const isEdit = !!category;
+  const [formData, setFormData] = useState({
+    name: category?.name || '',
+    description: category?.description || '',
+    image_url: category?.image_url || '',
+    is_active: category?.is_active ?? true
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      if (isEdit) {
+        await axios.put(`${API}/categories/${category.id}`, formData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Category updated successfully');
+      } else {
+        await axios.post(`${API}/categories`, formData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Category added successfully');
+      }
+      onSuccess();
+    } catch (error) {
+      console.error('Error saving category:', error);
+      toast.error('Failed to save category');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div>
+        <label className="block text-sm font-medium mb-1">Category Name *</label>
+        <Input
+          name="name"
+          value={formData.name}
+          onChange={handleChange}
+          placeholder="e.g., Mithai"
+          required
+          data-testid="category-name-input"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Description</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleChange}
+          placeholder="Category description"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          rows="3"
+          data-testid="category-description-input"
+        />
+      </div>
+      <div>
+        <label className="block text-sm font-medium mb-1">Image URL</label>
+        <Input
+          name="image_url"
+          type="url"
+          value={formData.image_url}
+          onChange={handleChange}
+          placeholder="https://example.com/category-image.jpg"
+          data-testid="category-image-url-input"
+        />
+      </div>
+      <div className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          name="is_active"
+          checked={formData.is_active}
+          onChange={handleChange}
+          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+          data-testid="category-active-checkbox"
+        />
+        <label className="text-sm font-medium">Active</label>
+      </div>
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={submitting}
+          className="bg-orange-500 hover:bg-orange-600" 
+          data-testid="submit-category-button"
+        >
+          {submitting ? 'Saving...' : isEdit ? 'Update Category' : 'Add Category'}
+        </Button>
+      </div>
+    </form>
+  );
+};
 // Order Management Component
 const OrderManagement = ({ orders, fetchOrders }) => {
   const updateOrderStatus = async (orderId, status) => {

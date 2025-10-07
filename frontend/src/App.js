@@ -637,19 +637,35 @@ const ProductsSection = () => {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('all');
+  const [categories, setCategories] = useState([{ value: 'all', label: 'All Products' }]);
 
-  const categories = [
-    { value: 'all', label: 'All Products' },
-    { value: 'mithai', label: 'Mithai' },
-    { value: 'namkeen', label: 'Namkeen' },
-    { value: 'laddu', label: 'Laddu' },
-    { value: 'bengali_sweets', label: 'Bengali Sweets' },
-    { value: 'dry_fruit_sweets', label: 'Dry Fruit Sweets' }
-  ];
+  useEffect(() => {
+    fetchCategories();
+  }, []);
 
   useEffect(() => {
     fetchProducts();
   }, [selectedCategory]);
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${API}/categories?active_only=true`);
+      const fetchedCategories = response.data.map(cat => ({
+        value: cat.name,
+        label: cat.name.charAt(0).toUpperCase() + cat.name.slice(1).replace(/_/g, ' ')
+      }));
+      setCategories([{ value: 'all', label: 'All Products' }, ...fetchedCategories]);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      // Fallback to default categories
+      setCategories([
+        { value: 'all', label: 'All Products' },
+        { value: 'mithai', label: 'Mithai' },
+        { value: 'namkeen', label: 'Namkeen' },
+        { value: 'laddu', label: 'Laddu' }
+      ]);
+    }
+  };
 
   const fetchProducts = async () => {
     try {
