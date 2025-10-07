@@ -32,6 +32,7 @@ from theme_system import ThemeManager, ThemeConfig, ThemeCreateUpdate, DEFAULT_T
 from offers_system import OfferManager, Offer, OfferCreate, OfferUpdate, OfferType
 from announcement_system import AnnouncementManager, Announcement, AnnouncementCreate, AnnouncementUpdate
 from advertisement_system import AdvertisementManager, Advertisement, AdvertisementCreate, AdvertisementUpdate
+from enhanced_chatbot import OrderAwareChatBot, ChatSession, ChatMessage, ChatRequest
 from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
@@ -66,12 +67,13 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Initialize Notification, Theme, Offer, Advertisement, and Announcement Managers
+# Initialize Notification, Theme, Offer, Advertisement, Announcement and Chatbot Managers
 notification_manager = NotificationManager(db)
 theme_manager = ThemeManager(db)
 offer_manager = OfferManager(db)
 announcement_manager = AnnouncementManager(db)
 advertisement_manager = AdvertisementManager(db)
+chatbot_manager = OrderAwareChatBot(db)
 
 # Create the main app without a prefix
 app = FastAPI(title="Mithaas Delights API", version="1.0.0")
@@ -515,17 +517,7 @@ class OrderCreate(BaseModel):
     advance_required: bool = False
     advance_amount: Optional[float] = None
 
-# Chatbot Models
-class ChatMessage(BaseModel):
-    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    session_id: str
-    message: str
-    response: str
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-
-class ChatRequest(BaseModel):
-    session_id: str
-    message: str
+# Chatbot Models are imported from enhanced_chatbot
 
 # Helper functions
 def prepare_for_mongo(data):
@@ -2646,63 +2638,84 @@ async def delete_media_item(
         raise HTTPException(status_code=404, detail="Media item not found")
     return {"message": "Media item deleted successfully"}
 
-# ==================== CHATBOT ROUTES ====================
+# ==================== ENHANCED CHATBOT ROUTES ====================
 
-@api_router.post("/chatbot")
-async def chat_with_bot(chat_request: ChatRequest):
-    """Chat with Gemini AI bot"""
-    if not genai:
-        raise HTTPException(
-            status_code=503,
-            detail="Chatbot service unavailable. Google Generative AI not installed."
-        )
-    
+@api_router.post("/chat")
+async def basic_chat(chat_request: ChatRequest):
+    """Basic chat endpoint for backward compatibility"""
     try:
-        # Configure Gemini API
-        gemini_api_key = os.environ.get('GEMINI_API_KEY')
-        if not gemini_api_key:
-            raise HTTPException(
-                status_code=503,
-                detail="Chatbot service not configured. Missing GEMINI_API_KEY."
-            )
-        
-        genai.configure(api_key=gemini_api_key)
-        
-        # Create model
-        model = genai.GenerativeModel('gemini-pro')
-        
-        # Generate response
-        prompt = f"""You are a helpful customer service assistant for Mithaas Delights, 
-        a premium Indian sweets and snacks shop. Answer questions about:
-        - Product information (sweets, namkeen, traditional Indian sweets)
-        - Order placement and delivery
-        - Store location and hours
-        - Ingredients and allergens
-        
-        User question: {chat_request.message}"""
-        
-        response = model.generate_content(prompt)
-        
-        # Store chat message
-        chat_message = ChatMessage(
-            session_id=chat_request.session_id,
-            message=chat_request.message,
-            response=response.text
-        )
-        await db.chat_messages.insert_one(prepare_for_mongo(chat_message.dict()))
-        
-        return {
-            "response": response.text,
-            "session_id": chat_request.session_id
-        }
-    
+        result = await chatbot_manager.process_message(chat_request)
+        return result
     except Exception as e:
-        logger.error(f"Chatbot error: {str(e)}")
+        logger.error(f"Basic chat error: {str(e)}")
         return {
-            "response": "I apologize, but I'm having trouble processing your request right now. Please try again later or contact our support team.",
+            "response": "I apologize, but I'm having trouble processing your request right now. Please try again later or contact our support team at +91 8989549544.",
             "session_id": chat_request.session_id,
             "error": str(e)
         }
+
+@api_router.post("/chat/enhanced/message")
+async def enhanced_chat_message(
+    chat_request: ChatRequest,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Enhanced chat with order awareness and user context"""
+    try:
+        # Get user ID if authenticated
+        user_id = None
+        if credentials:
+            try:
+                current_user = await get_current_user(credentials, db)
+                user_id = current_user["id"]
+                chat_request.user_id = user_id
+            except:
+                pass  # Continue as guest user
+        
+        result = await chatbot_manager.process_message(chat_request)
+        return result
+    except Exception as e:
+        logger.error(f"Enhanced chat error: {str(e)}")
+        return {
+            "response": "I apologize, but I'm having trouble processing your request right now. Please try again later or contact our support team at +91 8989549544.",
+            "session_id": chat_request.session_id,
+            "error": str(e)
+        }
+
+@api_router.get("/chat/history/{session_id}")
+async def get_chat_history(
+    session_id: str,
+    limit: int = 50,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get chat history for a session"""
+    try:
+        messages = await chatbot_manager.get_chat_history(session_id, limit)
+        return {"messages": messages}
+    except Exception as e:
+        logger.error(f"Chat history error: {str(e)}")
+        return {"messages": [], "error": str(e)}
+
+@api_router.delete("/chat/clear/{session_id}")
+async def clear_chat_session(
+    session_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Clear chat session and messages"""
+    try:
+        success = await chatbot_manager.clear_session(session_id)
+        if success:
+            return {"message": "Chat session cleared successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="Session not found or could not be cleared")
+    except Exception as e:
+        logger.error(f"Clear chat error: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to clear chat session")
+
+# Legacy endpoint for backward compatibility
+@api_router.post("/chatbot")
+async def chat_with_bot(chat_request: ChatRequest):
+    """Legacy chat endpoint - redirects to enhanced chat"""
+    return await basic_chat(chat_request)
 
 # ==================== NOTIFICATION ROUTES ====================
 

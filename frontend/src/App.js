@@ -24,7 +24,7 @@ import { loadCartFromLocalStorage, saveCartToLocalStorage, clearCartFromLocalSto
 import { BannerCarousel } from "./components/BannerCarousel";
 import { NotificationSystem } from "./components/NotificationSystem";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
-import { VoiceChatBot } from "./components/VoiceChatBot";
+import { UnifiedChatBot } from "./components/UnifiedChatBot";
 import { AdvertisementSection } from "./components/AdvertisementSection";
 import { MarqueeAnnouncements } from "./components/MarqueeAnnouncements";
 import { HeaderLogo } from "./components/Logo";
@@ -1641,7 +1641,7 @@ const Home = () => {
       <AboutSection />
       <ContactSection />
       <Footer />
-      <VoiceChatBot isAuthenticated={isAuthenticated} />
+      <UnifiedChatBot />
     </div>
   );
 };
