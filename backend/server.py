@@ -26,10 +26,12 @@ from auth_utils import (
 from delivery_utils import calculate_delivery_charge, geocode_address
 from razorpay_utils import create_razorpay_order, verify_razorpay_signature, create_refund
 from file_upload_utils import save_base64_image, save_uploaded_file, get_file_size
-# Import notification, theme, and offers system classes
+# Import notification, theme, offers, advertisement, and announcement system classes
 from notification_system import NotificationManager, NotificationStatus, NotificationCreate
 from theme_system import ThemeManager, ThemeConfig, ThemeCreateUpdate, DEFAULT_THEMES
 from offers_system import OfferManager, Offer, OfferCreate, OfferUpdate, OfferType
+from announcement_system import AnnouncementManager, Announcement, AnnouncementCreate, AnnouncementUpdate
+from advertisement_system import AdvertisementManager, Advertisement, AdvertisementCreate, AdvertisementUpdate
 from bson import ObjectId
 
 ROOT_DIR = Path(__file__).parent
@@ -64,10 +66,12 @@ mongo_url = os.environ['MONGO_URL']
 client = AsyncIOMotorClient(mongo_url)
 db = client[os.environ['DB_NAME']]
 
-# Initialize Notification, Theme, and Offer Managers
+# Initialize Notification, Theme, Offer, Advertisement, and Announcement Managers
 notification_manager = NotificationManager(db)
 theme_manager = ThemeManager(db)
 offer_manager = OfferManager(db)
+announcement_manager = AnnouncementManager(db)
+advertisement_manager = AdvertisementManager(db)
 
 # Create the main app without a prefix
 app = FastAPI(title="Mithaas Delights API", version="1.0.0")
@@ -1517,6 +1521,116 @@ async def apply_offers_to_cart(
         logger.error(f"Error applying offers to cart: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+# ==================== ANNOUNCEMENT ROUTES ====================
+
+@api_router.post("/announcements", response_model=Announcement)
+async def create_announcement(
+    announcement: AnnouncementCreate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Create a new announcement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        announcement_obj = await announcement_manager.create_announcement(announcement)
+        return announcement_obj
+    except Exception as e:
+        logger.error(f"Error creating announcement: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/announcements", response_model=List[Announcement])
+async def get_announcements(
+    active_only: bool = False,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Get all announcements (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        announcements = await announcement_manager.get_all_announcements(active_only=active_only)
+        return announcements
+    except Exception as e:
+        logger.error(f"Error fetching announcements: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/announcements/active")
+async def get_active_announcements(
+    page: Optional[str] = "home",
+    announcement_type: Optional[str] = None
+):
+    """Get active announcements for frontend display"""
+    try:
+        announcements = await announcement_manager.get_active_announcements(
+            page=page,
+            announcement_type=announcement_type
+        )
+        return serialize_mongo_document([announcement.dict() for announcement in announcements])
+    except Exception as e:
+        logger.error(f"Error fetching active announcements: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.get("/announcements/{announcement_id}", response_model=Announcement)
+async def get_announcement(announcement_id: str):
+    """Get announcement by ID"""
+    announcement = await announcement_manager.get_announcement_by_id(announcement_id)
+    if not announcement:
+        raise HTTPException(status_code=404, detail="Announcement not found")
+    return announcement
+
+@api_router.put("/announcements/{announcement_id}", response_model=Announcement)
+async def update_announcement(
+    announcement_id: str,
+    announcement_update: AnnouncementUpdate,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Update an announcement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        updated_announcement = await announcement_manager.update_announcement(announcement_id, announcement_update)
+        return updated_announcement
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error updating announcement: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.delete("/announcements/{announcement_id}")
+async def delete_announcement(
+    announcement_id: str,
+    credentials: HTTPAuthorizationCredentials = Security(security)
+):
+    """Delete an announcement (Admin only)"""
+    await get_current_admin_user(credentials, db)
+    
+    try:
+        success = await announcement_manager.delete_announcement(announcement_id)
+        if not success:
+            raise HTTPException(status_code=404, detail="Announcement not found")
+        return {"message": "Announcement deleted successfully"}
+    except Exception as e:
+        logger.error(f"Error deleting announcement: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/announcements/{announcement_id}/display")
+async def record_announcement_display(announcement_id: str):
+    """Record announcement display for analytics"""
+    try:
+        success = await announcement_manager.record_display(announcement_id)
+        return {"success": success}
+    except Exception as e:
+        logger.error(f"Error recording announcement display: {str(e)}")
+        return {"success": False}
+
+@api_router.post("/announcements/{announcement_id}/click")
+async def record_announcement_click(announcement_id: str):
+    """Record announcement click for analytics"""
+    try:
+        success = await announcement_manager.record_click(announcement_id)
+        return {"success": success}
+    except Exception as e:
+        logger.error(f"Error recording announcement click: {str(e)}")
+        return {"success": False}
 # ==================== BANNER ROUTES ====================
 
 @api_router.post("/banners", response_model=Banner)
@@ -3039,7 +3153,7 @@ async def init_admin():
     }
 # ==================== ADVERTISEMENT ROUTES ====================
 # Import advertisement manager
-from advertisement_system import AdvertisementManager, AdvertisementCreate, AdvertisementUpdate
+# Already imported at top of file
 
 # Initialize Advertisement Manager
 advertisement_manager = AdvertisementManager(db)

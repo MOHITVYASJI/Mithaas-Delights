@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Plus, Edit, Trash2, Eye, Package, Users, BarChart, Settings, Star, Check, X, MessageSquare, Palette, Play, Folder } from 'lucide-react';
+import { Plus, Edit, Trash2, Eye, Package, Users, BarChart, Settings, Star, Check, X, MessageSquare, Palette, Play, Folder, Tag, Volume2, Image, Calendar, Gift, Percent } from 'lucide-react';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { Input } from './ui/input';
@@ -109,7 +109,7 @@ export const AdminPanel = () => {
 
       <div className="max-w-7xl mx-auto px-4 py-6">
         <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-9 gap-2">
+          <TabsList className="grid w-full grid-cols-4 lg:grid-cols-12 gap-1">
             <TabsTrigger value="dashboard" data-testid="dashboard-tab">
               <BarChart className="w-4 h-4 mr-2" />
               Dashboard
@@ -121,6 +121,18 @@ export const AdminPanel = () => {
             <TabsTrigger value="categories" data-testid="categories-tab">
               <Folder className="w-4 h-4 mr-2" />
               Categories
+            </TabsTrigger>
+            <TabsTrigger value="offers" data-testid="offers-tab">
+              <Tag className="w-4 h-4 mr-2" />
+              Offers
+            </TabsTrigger>
+            <TabsTrigger value="announcements" data-testid="announcements-tab">
+              <Volume2 className="w-4 h-4 mr-2" />
+              Marquee
+            </TabsTrigger>
+            <TabsTrigger value="advertisements" data-testid="advertisements-tab">
+              <Image className="w-4 h-4 mr-2" />
+              Ads
             </TabsTrigger>
             <TabsTrigger value="orders" data-testid="orders-tab">
               <Eye className="w-4 h-4 mr-2" />
@@ -157,6 +169,18 @@ export const AdminPanel = () => {
           </TabsContent>
           <TabsContent value="categories">
             <CategoryManagement />
+          </TabsContent>
+
+          <TabsContent value="offers">
+            <OffersManagement />
+          </TabsContent>
+
+          <TabsContent value="announcements">
+            <AnnouncementManagement />
+          </TabsContent>
+
+          <TabsContent value="advertisements">
+            <AdvertisementManagement />
           </TabsContent>
 
           <TabsContent value="orders">
@@ -3154,6 +3178,1478 @@ const MediaGalleryManagement = () => {
         </div>
       )}
     </div>
+  );
+};
+
+// ==================== OFFERS MANAGEMENT ====================
+
+const OffersManagement = () => {
+  const [offers, setOffers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editOffer, setEditOffer] = useState(null);
+
+  useEffect(() => {
+    fetchOffers();
+  }, []);
+
+  const fetchOffers = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/offers`, {
+        headers: getAuthHeaders()
+      });
+      setOffers(response.data);
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+      toast.error('Failed to fetch offers');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteOffer = async (offerId) => {
+    if (window.confirm('Are you sure you want to delete this offer?')) {
+      try {
+        await axios.delete(`${API}/offers/${offerId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Offer deleted successfully');
+        fetchOffers();
+      } catch (error) {
+        toast.error('Failed to delete offer');
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Offers Management</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-orange-500 hover:bg-orange-600" data-testid="add-offer-button">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Offer
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add New Offer</DialogTitle>
+            </DialogHeader>
+            <OfferForm onSuccess={() => {
+              setIsAddDialogOpen(false);
+              fetchOffers();
+            }} />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {offers.map((offer) => (
+            <Card key={offer.id} className="overflow-hidden" data-testid="offer-card">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <h3 className="font-semibold text-lg">{offer.name}</h3>
+                    <p className="text-sm text-gray-600 mt-1">{offer.description}</p>
+                  </div>
+                  <Badge 
+                    className={`${offer.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+                  >
+                    {offer.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-500">Type:</span>
+                    <span className="text-sm font-medium capitalize">{offer.offer_type.replace('_', ' ')}</span>
+                  </div>
+                  {offer.discount_percentage && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Discount:</span>
+                      <span className="text-sm font-medium">{offer.discount_percentage}% OFF</span>
+                    </div>
+                  )}
+                  {offer.discount_amount && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Amount:</span>
+                      <span className="text-sm font-medium">₹{offer.discount_amount} OFF</span>
+                    </div>
+                  )}
+                  {offer.buy_quantity && offer.get_quantity && (
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-500">Deal:</span>
+                      <span className="text-sm font-medium">Buy {offer.buy_quantity} Get {offer.get_quantity}</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between">
+                    <span className="text-sm text-gray-500">Usage:</span>
+                    <span className="text-sm font-medium">{offer.used_count}{offer.usage_limit ? `/${offer.usage_limit}` : ''}</span>
+                  </div>
+                </div>
+
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => setEditOffer(offer)}
+                    data-testid="edit-offer-button"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleDeleteOffer(offer.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Edit Offer Dialog */}
+      <Dialog open={!!editOffer} onOpenChange={() => setEditOffer(null)}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Edit Offer</DialogTitle>
+          </DialogHeader>
+          {editOffer && (
+            <OfferForm 
+              offer={editOffer}
+              onSuccess={() => {
+                setEditOffer(null);
+                fetchOffers();
+              }} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Offer Form Component
+const OfferForm = ({ offer, onSuccess }) => {
+  const isEdit = !!offer;
+  const [formData, setFormData] = useState({
+    name: offer?.name || '',
+    description: offer?.description || '',
+    offer_type: offer?.offer_type || 'percentage',
+    discount_percentage: offer?.discount_percentage || '',
+    discount_amount: offer?.discount_amount || '',
+    max_discount: offer?.max_discount || '',
+    buy_quantity: offer?.buy_quantity || '',
+    get_quantity: offer?.get_quantity || '',
+    get_discount_percentage: offer?.get_discount_percentage || '',
+    applicable_product_ids: offer?.applicable_product_ids || [],
+    category_names: offer?.category_names || [],
+    min_purchase_amount: offer?.min_purchase_amount || 0,
+    min_quantity: offer?.min_quantity || 1,
+    is_active: offer?.is_active ?? true,
+    start_date: offer?.start_date ? offer.start_date.split('T')[0] : '',
+    end_date: offer?.end_date ? offer.end_date.split('T')[0] : '',
+    usage_limit: offer?.usage_limit || '',
+    per_user_limit: offer?.per_user_limit || 1,
+    stackable: offer?.stackable ?? true,
+    auto_apply: offer?.auto_apply ?? true,
+    badge_text: offer?.badge_text || '',
+    badge_color: offer?.badge_color || '#f97316',
+    priority: offer?.priority || 0
+  });
+
+  const [products, setProducts] = useState([]);
+  const [categories, setCategories] = useState([]);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    fetchProducts();
+    fetchCategories();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      const response = await axios.get(`${API}/products`);
+      setProducts(response.data);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const response = await axios.get(`${API}/categories?active_only=true`);
+      setCategories(response.data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const offerData = {
+        ...formData,
+        discount_percentage: formData.discount_percentage ? parseInt(formData.discount_percentage) : null,
+        discount_amount: formData.discount_amount ? parseFloat(formData.discount_amount) : null,
+        max_discount: formData.max_discount ? parseFloat(formData.max_discount) : null,
+        buy_quantity: formData.buy_quantity ? parseInt(formData.buy_quantity) : null,
+        get_quantity: formData.get_quantity ? parseInt(formData.get_quantity) : null,
+        get_discount_percentage: formData.get_discount_percentage ? parseInt(formData.get_discount_percentage) : null,
+        min_purchase_amount: parseFloat(formData.min_purchase_amount) || 0,
+        min_quantity: parseInt(formData.min_quantity) || 1,
+        usage_limit: formData.usage_limit ? parseInt(formData.usage_limit) : null,
+        per_user_limit: parseInt(formData.per_user_limit) || 1,
+        priority: parseInt(formData.priority) || 0,
+        start_date: formData.start_date ? new Date(formData.start_date).toISOString() : null,
+        end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null
+      };
+
+      if (isEdit) {
+        await axios.put(`${API}/offers/${offer.id}`, offerData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Offer updated successfully');
+      } else {
+        await axios.post(`${API}/offers`, offerData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Offer created successfully');
+      }
+      onSuccess();
+    } catch (error) {
+      console.error('Error saving offer:', error);
+      toast.error('Failed to save offer');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Offer Name *</label>
+          <Input
+            name="name"
+            value={formData.name}
+            onChange={handleChange}
+            placeholder="e.g., Diwali Special 25% Off"
+            required
+            data-testid="offer-name-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Offer Type *</label>
+          <Select value={formData.offer_type} onValueChange={(value) => setFormData(prev => ({...prev, offer_type: value}))}>
+            <SelectTrigger data-testid="offer-type-select">
+              <SelectValue placeholder="Select offer type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="percentage">Percentage Discount</SelectItem>
+              <SelectItem value="flat_discount">Flat Discount</SelectItem>
+              <SelectItem value="buy_x_get_y">Buy X Get Y Free</SelectItem>
+              <SelectItem value="buy_x_get_y_discount">Buy X Get Y at Discount</SelectItem>
+              <SelectItem value="free_shipping">Free Shipping</SelectItem>
+              <SelectItem value="bundle">Bundle Offer</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Description</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleChange}
+          placeholder="Offer description"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          rows="3"
+          data-testid="offer-description-input"
+        />
+      </div>
+
+      {/* Discount Fields */}
+      <div className="grid grid-cols-3 gap-4">
+        {(formData.offer_type === 'percentage' || formData.offer_type === 'buy_x_get_y_discount') && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Discount %</label>
+            <Input
+              name="discount_percentage"
+              type="number"
+              value={formData.discount_percentage}
+              onChange={handleChange}
+              placeholder="25"
+              min="1"
+              max="100"
+              data-testid="offer-discount-percentage-input"
+            />
+          </div>
+        )}
+        {formData.offer_type === 'flat_discount' && (
+          <div>
+            <label className="block text-sm font-medium mb-1">Discount Amount (₹)</label>
+            <Input
+              name="discount_amount"
+              type="number"
+              value={formData.discount_amount}
+              onChange={handleChange}
+              placeholder="100"
+              min="0"
+              step="0.01"
+              data-testid="offer-discount-amount-input"
+            />
+          </div>
+        )}
+        <div>
+          <label className="block text-sm font-medium mb-1">Max Discount (₹)</label>
+          <Input
+            name="max_discount"
+            type="number"
+            value={formData.max_discount}
+            onChange={handleChange}
+            placeholder="500"
+            min="0"
+            step="0.01"
+            data-testid="offer-max-discount-input"
+          />
+        </div>
+      </div>
+
+      {/* Buy X Get Y Fields */}
+      {(formData.offer_type === 'buy_x_get_y' || formData.offer_type === 'buy_x_get_y_discount') && (
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Buy Quantity</label>
+            <Input
+              name="buy_quantity"
+              type="number"
+              value={formData.buy_quantity}
+              onChange={handleChange}
+              placeholder="2"
+              min="1"
+              data-testid="offer-buy-quantity-input"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Get Quantity</label>
+            <Input
+              name="get_quantity"
+              type="number"
+              value={formData.get_quantity}
+              onChange={handleChange}
+              placeholder="1"
+              min="1"
+              data-testid="offer-get-quantity-input"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Date Range */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <Input
+            name="start_date"
+            type="date"
+            value={formData.start_date}
+            onChange={handleChange}
+            data-testid="offer-start-date-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">End Date</label>
+          <Input
+            name="end_date"
+            type="date"
+            value={formData.end_date}
+            onChange={handleChange}
+            data-testid="offer-end-date-input"
+          />
+        </div>
+      </div>
+
+      {/* Usage Limits */}
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Usage Limit</label>
+          <Input
+            name="usage_limit"
+            type="number"
+            value={formData.usage_limit}
+            onChange={handleChange}
+            placeholder="100"
+            min="1"
+            data-testid="offer-usage-limit-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Per User Limit</label>
+          <Input
+            name="per_user_limit"
+            type="number"
+            value={formData.per_user_limit}
+            onChange={handleChange}
+            placeholder="1"
+            min="1"
+            data-testid="offer-per-user-limit-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Priority</label>
+          <Input
+            name="priority"
+            type="number"
+            value={formData.priority}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            data-testid="offer-priority-input"
+          />
+        </div>
+      </div>
+
+      {/* Badge Customization */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Badge Text</label>
+          <Input
+            name="badge_text"
+            value={formData.badge_text}
+            onChange={handleChange}
+            placeholder="SPECIAL OFFER"
+            data-testid="offer-badge-text-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Badge Color</label>
+          <Input
+            name="badge_color"
+            type="color"
+            value={formData.badge_color}
+            onChange={handleChange}
+            data-testid="offer-badge-color-input"
+          />
+        </div>
+      </div>
+
+      {/* Conditions */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Min Purchase Amount (₹)</label>
+          <Input
+            name="min_purchase_amount"
+            type="number"
+            value={formData.min_purchase_amount}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            step="0.01"
+            data-testid="offer-min-purchase-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Min Quantity</label>
+          <Input
+            name="min_quantity"
+            type="number"
+            value={formData.min_quantity}
+            onChange={handleChange}
+            placeholder="1"
+            min="1"
+            data-testid="offer-min-quantity-input"
+          />
+        </div>
+      </div>
+
+      {/* Checkboxes */}
+      <div className="grid grid-cols-3 gap-4">
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            name="is_active"
+            checked={formData.is_active}
+            onChange={handleChange}
+            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            data-testid="offer-active-checkbox"
+          />
+          <label className="text-sm font-medium">Active</label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            name="stackable"
+            checked={formData.stackable}
+            onChange={handleChange}
+            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            data-testid="offer-stackable-checkbox"
+          />
+          <label className="text-sm font-medium">Stackable</label>
+        </div>
+        <div className="flex items-center space-x-2">
+          <input
+            type="checkbox"
+            name="auto_apply"
+            checked={formData.auto_apply}
+            onChange={handleChange}
+            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            data-testid="offer-auto-apply-checkbox"
+          />
+          <label className="text-sm font-medium">Auto Apply</label>
+        </div>
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={submitting}
+          className="bg-orange-500 hover:bg-orange-600" 
+          data-testid="submit-offer-button"
+        >
+          {submitting ? 'Saving...' : isEdit ? 'Update Offer' : 'Create Offer'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+// ==================== ANNOUNCEMENT MANAGEMENT ====================
+
+const AnnouncementManagement = () => {
+  const [announcements, setAnnouncements] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editAnnouncement, setEditAnnouncement] = useState(null);
+
+  useEffect(() => {
+    fetchAnnouncements();
+  }, []);
+
+  const fetchAnnouncements = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/announcements`, {
+        headers: getAuthHeaders()
+      });
+      setAnnouncements(response.data);
+    } catch (error) {
+      console.error('Error fetching announcements:', error);
+      toast.error('Failed to fetch announcements');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAnnouncement = async (announcementId) => {
+    if (window.confirm('Are you sure you want to delete this announcement?')) {
+      try {
+        await axios.delete(`${API}/announcements/${announcementId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Announcement deleted successfully');
+        fetchAnnouncements();
+      } catch (error) {
+        toast.error('Failed to delete announcement');
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Marquee & Announcements</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-orange-500 hover:bg-orange-600" data-testid="add-announcement-button">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Announcement
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Add New Announcement</DialogTitle>
+            </DialogHeader>
+            <AnnouncementForm onSuccess={() => {
+              setIsAddDialogOpen(false);
+              fetchAnnouncements();
+            }} />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {announcements.map((announcement) => (
+            <Card key={announcement.id} className="overflow-hidden" data-testid="announcement-card">
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start mb-4">
+                  <div className="flex-1">
+                    <h3 className="font-semibold text-lg">{announcement.title}</h3>
+                    <p className="text-gray-600 mt-1">{announcement.message}</p>
+                  </div>
+                  <Badge 
+                    className={`${announcement.is_active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-700'}`}
+                  >
+                    {announcement.is_active ? 'Active' : 'Inactive'}
+                  </Badge>
+                </div>
+
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
+                  <div>
+                    <span className="text-gray-500">Type:</span>
+                    <p className="font-medium capitalize">{announcement.announcement_type}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Direction:</span>
+                    <p className="font-medium capitalize">{announcement.direction}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Speed:</span>
+                    <p className="font-medium">{announcement.animation_speed}px/s</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Views:</span>
+                    <p className="font-medium">{announcement.display_count || 0}</p>
+                  </div>
+                </div>
+
+                {/* Preview */}
+                <div className="mb-4">
+                  <span className="text-sm text-gray-500 mb-2 block">Preview:</span>
+                  <div 
+                    className="p-3 rounded border overflow-hidden relative"
+                    style={{
+                      backgroundColor: announcement.background_color,
+                      color: announcement.text_color,
+                      fontSize: announcement.font_size,
+                      fontWeight: announcement.font_weight
+                    }}
+                  >
+                    <div className="whitespace-nowrap animate-pulse">
+                      {announcement.message}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => setEditAnnouncement(announcement)}
+                    data-testid="edit-announcement-button"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleDeleteAnnouncement(announcement.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Edit Announcement Dialog */}
+      <Dialog open={!!editAnnouncement} onOpenChange={() => setEditAnnouncement(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit Announcement</DialogTitle>
+          </DialogHeader>
+          {editAnnouncement && (
+            <AnnouncementForm 
+              announcement={editAnnouncement}
+              onSuccess={() => {
+                setEditAnnouncement(null);
+                fetchAnnouncements();
+              }} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Announcement Form Component
+const AnnouncementForm = ({ announcement, onSuccess }) => {
+  const isEdit = !!announcement;
+  const [formData, setFormData] = useState({
+    title: announcement?.title || '',
+    message: announcement?.message || '',
+    announcement_type: announcement?.announcement_type || 'marquee',
+    color: announcement?.color || '#f97316',
+    background_color: announcement?.background_color || '#fff7ed',
+    text_color: announcement?.text_color || '#9a3412',
+    font_size: announcement?.font_size || '16px',
+    font_weight: announcement?.font_weight || '600',
+    animation_speed: announcement?.animation_speed || 50,
+    direction: announcement?.direction || 'left',
+    is_active: announcement?.is_active ?? true,
+    display_order: announcement?.display_order || 0,
+    show_on_pages: announcement?.show_on_pages || ['home'],
+    start_date: announcement?.start_date ? announcement.start_date.split('T')[0] : '',
+    end_date: announcement?.end_date ? announcement.end_date.split('T')[0] : '',
+    max_displays: announcement?.max_displays || ''
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const announcementData = {
+        ...formData,
+        animation_speed: parseInt(formData.animation_speed) || 50,
+        display_order: parseInt(formData.display_order) || 0,
+        max_displays: formData.max_displays ? parseInt(formData.max_displays) : null,
+        start_date: formData.start_date ? new Date(formData.start_date).toISOString() : null,
+        end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null
+      };
+
+      if (isEdit) {
+        await axios.put(`${API}/announcements/${announcement.id}`, announcementData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Announcement updated successfully');
+      } else {
+        await axios.post(`${API}/announcements`, announcementData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Announcement created successfully');
+      }
+      onSuccess();
+    } catch (error) {
+      console.error('Error saving announcement:', error);
+      toast.error('Failed to save announcement');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Title *</label>
+          <Input
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            placeholder="Announcement title"
+            required
+            data-testid="announcement-title-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Type</label>
+          <Select value={formData.announcement_type} onValueChange={(value) => setFormData(prev => ({...prev, announcement_type: value}))}>
+            <SelectTrigger data-testid="announcement-type-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="marquee">Marquee (Scrolling)</SelectItem>
+              <SelectItem value="ticker">Ticker</SelectItem>
+              <SelectItem value="banner">Banner</SelectItem>
+              <SelectItem value="popup">Popup</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Message *</label>
+        <textarea
+          name="message"
+          value={formData.message}
+          onChange={handleChange}
+          placeholder="Your announcement message"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          rows="3"
+          required
+          data-testid="announcement-message-input"
+        />
+      </div>
+
+      {/* Styling Options */}
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Background Color</label>
+          <Input
+            name="background_color"
+            type="color"
+            value={formData.background_color}
+            onChange={handleChange}
+            data-testid="announcement-bg-color-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Text Color</label>
+          <Input
+            name="text_color"
+            type="color"
+            value={formData.text_color}
+            onChange={handleChange}
+            data-testid="announcement-text-color-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Accent Color</label>
+          <Input
+            name="color"
+            type="color"
+            value={formData.color}
+            onChange={handleChange}
+            data-testid="announcement-accent-color-input"
+          />
+        </div>
+      </div>
+
+      {/* Animation Settings */}
+      <div className="grid grid-cols-4 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Font Size</label>
+          <Input
+            name="font_size"
+            value={formData.font_size}
+            onChange={handleChange}
+            placeholder="16px"
+            data-testid="announcement-font-size-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Font Weight</label>
+          <Select value={formData.font_weight} onValueChange={(value) => setFormData(prev => ({...prev, font_weight: value}))}>
+            <SelectTrigger data-testid="announcement-font-weight-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="400">Normal</SelectItem>
+              <SelectItem value="500">Medium</SelectItem>
+              <SelectItem value="600">Semi Bold</SelectItem>
+              <SelectItem value="700">Bold</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Direction</label>
+          <Select value={formData.direction} onValueChange={(value) => setFormData(prev => ({...prev, direction: value}))}>
+            <SelectTrigger data-testid="announcement-direction-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="left">Left</SelectItem>
+              <SelectItem value="right">Right</SelectItem>
+              <SelectItem value="up">Up</SelectItem>
+              <SelectItem value="down">Down</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Speed (px/s)</label>
+          <Input
+            name="animation_speed"
+            type="number"
+            value={formData.animation_speed}
+            onChange={handleChange}
+            placeholder="50"
+            min="10"
+            max="200"
+            data-testid="announcement-speed-input"
+          />
+        </div>
+      </div>
+
+      {/* Date Range & Limits */}
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <Input
+            name="start_date"
+            type="date"
+            value={formData.start_date}
+            onChange={handleChange}
+            data-testid="announcement-start-date-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">End Date</label>
+          <Input
+            name="end_date"
+            type="date"
+            value={formData.end_date}
+            onChange={handleChange}
+            data-testid="announcement-end-date-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Max Displays</label>
+          <Input
+            name="max_displays"
+            type="number"
+            value={formData.max_displays}
+            onChange={handleChange}
+            placeholder="Unlimited"
+            min="1"
+            data-testid="announcement-max-displays-input"
+          />
+        </div>
+      </div>
+
+      {/* Preview */}
+      <div>
+        <label className="block text-sm font-medium mb-2">Preview</label>
+        <div 
+          className="p-3 rounded border overflow-hidden relative min-h-[50px] flex items-center"
+          style={{
+            backgroundColor: formData.background_color,
+            color: formData.text_color,
+            fontSize: formData.font_size,
+            fontWeight: formData.font_weight
+          }}
+        >
+          <div className="whitespace-nowrap">
+            {formData.message || 'Your announcement message will appear here...'}
+          </div>
+        </div>
+      </div>
+
+      {/* Settings */}
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Display Order</label>
+          <Input
+            name="display_order"
+            type="number"
+            value={formData.display_order}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            data-testid="announcement-display-order-input"
+          />
+        </div>
+        <div className="flex items-end">
+          <label className="flex items-center space-x-2">
+            <input
+              type="checkbox"
+              name="is_active"
+              checked={formData.is_active}
+              onChange={handleChange}
+              className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+              data-testid="announcement-active-checkbox"
+            />
+            <span className="text-sm font-medium">Active</span>
+          </label>
+        </div>
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={submitting}
+          className="bg-orange-500 hover:bg-orange-600" 
+          data-testid="submit-announcement-button"
+        >
+          {submitting ? 'Saving...' : isEdit ? 'Update Announcement' : 'Create Announcement'}
+        </Button>
+      </div>
+    </form>
+  );
+};
+
+// ==================== ADVERTISEMENT MANAGEMENT ====================
+
+const AdvertisementManagement = () => {
+  const [advertisements, setAdvertisements] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editAdvertisement, setEditAdvertisement] = useState(null);
+
+  useEffect(() => {
+    fetchAdvertisements();
+  }, []);
+
+  const fetchAdvertisements = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.get(`${API}/advertisements`, {
+        headers: getAuthHeaders()
+      });
+      setAdvertisements(response.data);
+    } catch (error) {
+      console.error('Error fetching advertisements:', error);
+      toast.error('Failed to fetch advertisements');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeleteAdvertisement = async (adId) => {
+    if (window.confirm('Are you sure you want to delete this advertisement?')) {
+      try {
+        await axios.delete(`${API}/advertisements/${adId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Advertisement deleted successfully');
+        fetchAdvertisements();
+      } catch (error) {
+        toast.error('Failed to delete advertisement');
+      }
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900">Advertisement Management</h2>
+        <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="bg-orange-500 hover:bg-orange-600" data-testid="add-advertisement-button">
+              <Plus className="w-4 h-4 mr-2" />
+              Add Advertisement
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-3xl">
+            <DialogHeader>
+              <DialogTitle>Add New Advertisement</DialogTitle>
+            </DialogHeader>
+            <AdvertisementForm onSuccess={() => {
+              setIsAddDialogOpen(false);
+              fetchAdvertisements();
+            }} />
+          </DialogContent>
+        </Dialog>
+      </div>
+
+      {loading ? (
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mx-auto"></div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {advertisements.map((ad) => (
+            <Card key={ad.id} className="overflow-hidden" data-testid="advertisement-card">
+              <div className="relative">
+                <img 
+                  src={ad.media_url} 
+                  alt={ad.title}
+                  className="w-full h-48 object-cover"
+                />
+                <Badge 
+                  className={`absolute top-2 right-2 ${ad.is_active ? 'bg-green-500' : 'bg-gray-500'}`}
+                >
+                  {ad.is_active ? 'Active' : 'Inactive'}
+                </Badge>
+                <Badge className="absolute top-2 left-2 bg-blue-500">
+                  {ad.ad_type}
+                </Badge>
+              </div>
+              <CardContent className="p-4">
+                <h3 className="font-semibold text-lg mb-2">{ad.title}</h3>
+                <p className="text-gray-600 text-sm mb-3 line-clamp-2">{ad.description}</p>
+                
+                <div className="grid grid-cols-2 gap-2 text-sm mb-4">
+                  <div>
+                    <span className="text-gray-500">Placement:</span>
+                    <p className="font-medium capitalize">{ad.placement.replace('_', ' ')}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Impressions:</span>
+                    <p className="font-medium">{ad.impression_count || 0}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">Clicks:</span>
+                    <p className="font-medium">{ad.click_count || 0}</p>
+                  </div>
+                  <div>
+                    <span className="text-gray-500">CTR:</span>
+                    <p className="font-medium">
+                      {ad.impression_count > 0 ? ((ad.click_count / ad.impression_count) * 100).toFixed(2) : 0}%
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex space-x-2">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={() => setEditAdvertisement(ad)}
+                    data-testid="edit-advertisement-button"
+                  >
+                    <Edit className="w-4 h-4 mr-1" />
+                    Edit
+                  </Button>
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    onClick={() => handleDeleteAdvertisement(ad.id)}
+                    className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Edit Advertisement Dialog */}
+      <Dialog open={!!editAdvertisement} onOpenChange={() => setEditAdvertisement(null)}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit Advertisement</DialogTitle>
+          </DialogHeader>
+          {editAdvertisement && (
+            <AdvertisementForm 
+              advertisement={editAdvertisement}
+              onSuccess={() => {
+                setEditAdvertisement(null);
+                fetchAdvertisements();
+              }} 
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+};
+
+// Advertisement Form Component
+const AdvertisementForm = ({ advertisement, onSuccess }) => {
+  const isEdit = !!advertisement;
+  const [formData, setFormData] = useState({
+    title: advertisement?.title || '',
+    description: advertisement?.description || '',
+    ad_type: advertisement?.ad_type || 'banner',
+    placement: advertisement?.placement || 'hero_section',
+    media_url: advertisement?.media_url || '',
+    media_type: advertisement?.media_type || 'image',
+    click_url: advertisement?.click_url || '',
+    cta_text: advertisement?.cta_text || 'Shop Now',
+    target_audience: advertisement?.target_audience || 'all',
+    display_order: advertisement?.display_order || 0,
+    is_active: advertisement?.is_active ?? true,
+    start_date: advertisement?.start_date ? advertisement.start_date.split('T')[0] : '',
+    end_date: advertisement?.end_date ? advertisement.end_date.split('T')[0] : '',
+    budget_limit: advertisement?.budget_limit || '',
+    cost_per_click: advertisement?.cost_per_click || ''
+  });
+
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const advertisementData = {
+        ...formData,
+        display_order: parseInt(formData.display_order) || 0,
+        budget_limit: formData.budget_limit ? parseFloat(formData.budget_limit) : null,
+        cost_per_click: formData.cost_per_click ? parseFloat(formData.cost_per_click) : null,
+        start_date: formData.start_date ? new Date(formData.start_date).toISOString() : null,
+        end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null
+      };
+
+      if (isEdit) {
+        await axios.put(`${API}/advertisements/${advertisement.id}`, advertisementData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Advertisement updated successfully');
+      } else {
+        await axios.post(`${API}/advertisements`, advertisementData, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Advertisement created successfully');
+      }
+      onSuccess();
+    } catch (error) {
+      console.error('Error saving advertisement:', error);
+      toast.error('Failed to save advertisement');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? checked : value
+    }));
+  };
+
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4">
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Title *</label>
+          <Input
+            name="title"
+            value={formData.title}
+            onChange={handleChange}
+            placeholder="Advertisement title"
+            required
+            data-testid="advertisement-title-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Ad Type</label>
+          <Select value={formData.ad_type} onValueChange={(value) => setFormData(prev => ({...prev, ad_type: value}))}>
+            <SelectTrigger data-testid="advertisement-type-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="banner">Banner</SelectItem>
+              <SelectItem value="popup">Popup</SelectItem>
+              <SelectItem value="inline">Inline</SelectItem>
+              <SelectItem value="carousel">Carousel</SelectItem>
+              <SelectItem value="video">Video</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Description</label>
+        <textarea
+          name="description"
+          value={formData.description}
+          onChange={handleChange}
+          placeholder="Advertisement description"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
+          rows="3"
+          data-testid="advertisement-description-input"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Media URL *</label>
+          <Input
+            name="media_url"
+            type="url"
+            value={formData.media_url}
+            onChange={handleChange}
+            placeholder="https://example.com/ad-image.jpg"
+            required
+            data-testid="advertisement-media-url-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Placement</label>
+          <Select value={formData.placement} onValueChange={(value) => setFormData(prev => ({...prev, placement: value}))}>
+            <SelectTrigger data-testid="advertisement-placement-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="hero_section">Hero Section</SelectItem>
+              <SelectItem value="product_grid">Product Grid</SelectItem>
+              <SelectItem value="sidebar">Sidebar</SelectItem>
+              <SelectItem value="footer">Footer</SelectItem>
+              <SelectItem value="header">Header</SelectItem>
+              <SelectItem value="between_products">Between Products</SelectItem>
+              <SelectItem value="checkout">Checkout</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Media Type</label>
+          <Select value={formData.media_type} onValueChange={(value) => setFormData(prev => ({...prev, media_type: value}))}>
+            <SelectTrigger data-testid="advertisement-media-type-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="image">Image</SelectItem>
+              <SelectItem value="video">Video</SelectItem>
+              <SelectItem value="carousel">Carousel</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">CTA Text</label>
+          <Input
+            name="cta_text"
+            value={formData.cta_text}
+            onChange={handleChange}
+            placeholder="Shop Now"
+            data-testid="advertisement-cta-text-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Target Audience</label>
+          <Select value={formData.target_audience} onValueChange={(value) => setFormData(prev => ({...prev, target_audience: value}))}>
+            <SelectTrigger data-testid="advertisement-target-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Users</SelectItem>
+              <SelectItem value="new_users">New Users</SelectItem>
+              <SelectItem value="returning_users">Returning Users</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      <div>
+        <label className="block text-sm font-medium mb-1">Click URL</label>
+        <Input
+          name="click_url"
+          type="url"
+          value={formData.click_url}
+          onChange={handleChange}
+          placeholder="https://example.com/landing-page"
+          data-testid="advertisement-click-url-input"
+        />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Start Date</label>
+          <Input
+            name="start_date"
+            type="date"
+            value={formData.start_date}
+            onChange={handleChange}
+            data-testid="advertisement-start-date-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">End Date</label>
+          <Input
+            name="end_date"
+            type="date"
+            value={formData.end_date}
+            onChange={handleChange}
+            data-testid="advertisement-end-date-input"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium mb-1">Display Order</label>
+          <Input
+            name="display_order"
+            type="number"
+            value={formData.display_order}
+            onChange={handleChange}
+            placeholder="0"
+            min="0"
+            data-testid="advertisement-display-order-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Budget Limit (₹)</label>
+          <Input
+            name="budget_limit"
+            type="number"
+            value={formData.budget_limit}
+            onChange={handleChange}
+            placeholder="1000"
+            min="0"
+            step="0.01"
+            data-testid="advertisement-budget-input"
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium mb-1">Cost Per Click (₹)</label>
+          <Input
+            name="cost_per_click"
+            type="number"
+            value={formData.cost_per_click}
+            onChange={handleChange}
+            placeholder="5.00"
+            min="0"
+            step="0.01"
+            data-testid="advertisement-cpc-input"
+          />
+        </div>
+      </div>
+
+      <div className="flex items-center space-x-2">
+        <input
+          type="checkbox"
+          name="is_active"
+          checked={formData.is_active}
+          onChange={handleChange}
+          className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+          data-testid="advertisement-active-checkbox"
+        />
+        <label className="text-sm font-medium">Active</label>
+      </div>
+
+      <div className="flex justify-end space-x-2 pt-4">
+        <Button type="button" variant="outline" onClick={onSuccess}>
+          Cancel
+        </Button>
+        <Button 
+          type="submit" 
+          disabled={submitting}
+          className="bg-orange-500 hover:bg-orange-600" 
+          data-testid="submit-advertisement-button"
+        >
+          {submitting ? 'Saving...' : isEdit ? 'Update Advertisement' : 'Create Advertisement'}
+        </Button>
+      </div>
+    </form>
   );
 };
 
