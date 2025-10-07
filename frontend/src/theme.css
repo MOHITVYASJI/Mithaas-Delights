@@ -1,6 +1,6 @@
 /* 
- * Comprehensive Theme System
- * This CSS ensures themes affect the ENTIRE website
+ * Enhanced Theme System with Proper Contrast
+ * Ensures all elements are visible in both Light and Dark modes
  */
 
 /* CSS Variables for theme colors */
@@ -10,17 +10,17 @@
   --secondary-color: #f59e0b;
   --accent-color: #ea580c;
   
-  /* Background Colors */
+  /* Background Colors - Light Mode */
   --background-color: #ffffff;
   --surface-color: #fff7ed;
   --card-bg: #ffffff;
   
-  /* Text Colors */
-  --text-primary: #1f2937;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
+  /* Text Colors - Light Mode (Dark text for contrast) */
+  --text-primary: #111827;
+  --text-secondary: #000000;
+  --text-muted: #000000;
   
-  /* Border Colors */
+  /* Border Colors - Light Mode */
   --border-color: #fed7aa;
   --border-light: #fef3c7;
   
@@ -37,16 +37,25 @@
 
 /* Dark Mode Variables */
 .dark,
+html.dark,
+body.dark,
 [data-theme="dark"] {
-  --background-color: #111827;
-  --surface-color: #1f2937;
-  --card-bg: #1f2937;
-  --text-primary: #f9fafb;
-  --text-secondary: #d1d5db;
-  --text-muted: #9ca3af;
-  --border-color: #374151;
-  --border-light: #4b5563;
-  --gradient-hero: linear-gradient(to bottom right, #111827, #1f2937, #111827);
+  /* Background Colors - Dark Mode */
+  --background-color: #0f172a !important;
+  --surface-color: #1e293b !important;
+  --card-bg: #1e293b !important;
+  
+  /* Text Colors - Dark Mode (Light text for contrast) */
+  --text-primary: #f1f5f9 !important;
+  --text-secondary: #fdfdfd !important;
+  --text-muted: #fbfcff !important;
+  
+  /* Border Colors - Dark Mode */
+  --border-color: #334155 !important;
+  --border-light: #475569 !important;
+  
+  /* Gradients - Dark Mode */
+  --gradient-hero: linear-gradient(to bottom right, #0f172a, #1e293b, #0f172a) !important;
 }
 
 /* Apply theme to body */
@@ -56,53 +65,68 @@ body {
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Global element theming */
+/* Global element theming with smooth transitions */
 * {
   transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
 }
 
-/* Headers and Navigation */
+/* ===== HEADERS AND NAVIGATION ===== */
 header,
 nav {
-  background-color: var(--card-bg) !important;
+  background-color: rgba(255, 255, 255, 0.95) !important;
   color: var(--text-primary) !important;
   border-color: var(--border-light) !important;
 }
 
-/* Sections */
+.dark header,
+.dark nav {
+  background-color: rgba(15, 23, 42, 0.95) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* ===== SECTIONS ===== */
 section {
   background-color: var(--background-color) !important;
   color: var(--text-primary) !important;
 }
 
+/* Hero Section */
 section.hero,
-section[id="home"] {
+section[id="home"],
+.hero-section {
   background: var(--gradient-hero) !important;
+  color: var(--text-primary) !important;
 }
 
+/* White background sections */
 section.bg-white,
 section[class*="bg-white"] {
   background-color: var(--card-bg) !important;
 }
 
+/* Gradient sections */
 section.bg-gradient-to-br,
-section[class*="bg-gradient"] {
+section[class*="bg-gradient"],
+#about {
   background: var(--gradient-hero) !important;
 }
 
-/* Cards */
+/* ===== CARDS ===== */
 .card,
 [class*="Card"],
-div[class*="card"] {
+div[class*="card"],
+[role="region"] {
   background-color: var(--card-bg) !important;
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
 }
 
-/* Inputs and Forms */
+/* ===== INPUTS AND FORMS ===== */
 input,
 textarea,
-select {
+select,
+[role="textbox"] {
   background-color: var(--card-bg) !important;
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
@@ -111,52 +135,82 @@ select {
 input::placeholder,
 textarea::placeholder {
   color: var(--text-muted) !important;
+  opacity: 0.7;
 }
 
-/* Buttons - preserve primary button colors */
-button:not(.bg-orange-500):not(.bg-gradient-to-r):not([class*="bg-orange"]):not([class*="bg-red"]):not([class*="bg-green"]) {
+input:focus,
+textarea:focus,
+select:focus {
+  outline: 2px solid var(--primary-color) !important;
+  outline-offset: 2px;
+}
+
+/* ===== BUTTONS ===== */
+/* Preserve primary/brand colored buttons */
+button:not(.bg-orange-500):not(.bg-gradient-to-r):not([class*="bg-orange"]):not([class*="bg-red"]):not([class*="bg-green"]):not([class*="bg-blue"]) {
   background-color: var(--surface-color) !important;
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
 }
 
-/* Dropdowns and Menus */
+button:hover:not(.bg-orange-500):not(.bg-gradient-to-r):not([class*="bg-orange"]) {
+  opacity: 0.9;
+}
+
+/* ===== DROPDOWNS AND MENUS ===== */
 [role="menu"],
+[role="menubar"],
+[role="menuitem"],
 [class*="dropdown"],
-[class*="Menu"] {
+[class*="Menu"],
+[class*="Popover"] {
   background-color: var(--card-bg) !important;
   color: var(--text-primary) !important;
   border-color: var(--border-color) !important;
 }
 
-/* Modals and Dialogs */
+/* ===== MODALS AND DIALOGS ===== */
 [role="dialog"],
 [class*="modal"],
-[class*="Dialog"] {
+[class*="Dialog"],
+[class*="Sheet"] {
   background-color: var(--card-bg) !important;
   color: var(--text-primary) !important;
 }
 
-/* Footer */
+/* Modal overlay */
+[class*="overlay"],
+[class*="backdrop"] {
+  background-color: rgba(0, 0, 0, 0.5) !important;
+}
+
+.dark [class*="overlay"],
+.dark [class*="backdrop"] {
+  background-color: rgba(0, 0, 0, 0.7) !important;
+}
+
+/* ===== FOOTER ===== */
 footer {
-  background-color: var(--surface-color) !important;
-  color: var(--text-primary) !important;
+  background-color: #111827 !important;
+  color: #f9fafb !important;
 }
 
 .dark footer {
-  background-color: #0f172a !important;
+  background-color: #020617 !important;
+  color: #f1f5f9 !important;
 }
 
-/* Text Colors */
+/* ===== TEXT COLORS ===== */
 h1, h2, h3, h4, h5, h6 {
   color: var(--text-primary) !important;
 }
 
-p, span, div, li, a {
-  color: var(--text-primary);
+p, span:not([class*="text-orange"]):not([class*="text-red"]):not([class*="text-green"]):not([class*="text-blue"]), 
+div:not([class*="bg-"]), li, a:not([class*="text-orange"]) {
+  color: var(--text-primary) !important;
 }
 
-/* Specific text utility overrides */
+/* Specific text utility overrides for proper contrast */
 .text-gray-800,
 .text-gray-900 {
   color: var(--text-primary) !important;
@@ -172,101 +226,187 @@ p, span, div, li, a {
   color: var(--text-muted) !important;
 }
 
-/* Preserve brand colors */
+.text-white {
+  color: #ffffff !important;
+}
+
+/* ===== PRESERVE BRAND COLORS ===== */
 .text-orange-600,
 .text-orange-700,
 .text-orange-500,
+.text-amber-600,
 .bg-orange-500,
 .bg-orange-600,
+.bg-gradient-to-r,
 [class*="from-orange"],
 [class*="to-orange"],
-[class*="via-orange"] {
-  /* Keep as is - brand colors */
+[class*="via-orange"],
+[class*="from-amber"],
+[class*="to-amber"] {
+  /* Keep as is - brand colors should remain consistent */
 }
 
-/* Borders */
-[class*="border-amber"],
-[class*="border-orange"] {
+/* ===== BORDERS ===== */
+[class*="border-gray"] {
   border-color: var(--border-color) !important;
 }
 
-/* Backgrounds that should adapt */
+[class*="border-amber"],
+[class*="border-orange"] {
+  border-color: var(--primary-color) !important;
+}
+
+/* ===== BACKGROUNDS THAT SHOULD ADAPT ===== */
 .bg-gray-50,
 .bg-gray-100,
 [class*="bg-amber-50"],
 [class*="bg-orange-50"] {
   background-color: var(--surface-color) !important;
+  color: var(--text-primary) !important;
 }
 
-/* Product Cards */
+/* ===== PRODUCT CARDS ===== */
 [data-testid="product-card"],
 .product-card {
   background-color: var(--card-bg) !important;
   border-color: var(--border-color) !important;
-}
-
-/* Contact Section */
-#contact,
-section[id="contact"] {
-  background-color: var(--background-color) !important;
   color: var(--text-primary) !important;
 }
 
-#contact .card,
-#contact input,
-#contact textarea {
-  background-color: var(--card-bg) !important;
-  color: var(--text-primary) !important;
-  border-color: var(--border-color) !important;
+/* ===== BADGES ===== */
+/* Preserve status badge colors but ensure text is readable */
+.bg-red-500,
+.bg-red-600 {
+  background-color: #ef4444 !important;
+  color: #ffffff !important;
 }
 
-/* About Section */
-#about,
-section[id="about"] {
-  background: var(--gradient-hero) !important;
-  color: var(--text-primary) !important;
+.bg-green-500,
+.bg-green-600 {
+  background-color: #10b981 !important;
+  color: #ffffff !important;
 }
 
-/* Products Section */
-#products,
-section[id="products"] {
-  background-color: var(--background-color) !important;
-  color: var(--text-primary) !important;
+.bg-blue-500,
+.bg-blue-600 {
+  background-color: #3b82f6 !important;
+  color: #ffffff !important;
 }
 
-/* Shadows - adjust for dark mode */
-.dark [class*="shadow"] {
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5), 0 2px 4px -1px rgba(0, 0, 0, 0.3) !important;
+.bg-amber-500,
+.bg-yellow-500 {
+  background-color: #f59e0b !important;
+  color: #111827 !important;
 }
 
-/* Hover states */
+/* ===== SHADOWS ===== */
+/* Adjust shadows for dark mode */
+.dark [class*="shadow"]:not(.shadow-none) {
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.6), 0 2px 4px -1px rgba(0, 0, 0, 0.4) !important;
+}
+
+/* ===== HOVER STATES ===== */
 [class*="hover:bg-gray"]:hover,
 [class*="hover:bg-amber"]:hover {
   background-color: var(--surface-color) !important;
+  opacity: 0.9;
 }
 
-/* Admin Panel */
+/* ===== ADMIN PANEL ===== */
 .admin-panel,
 [class*="admin"] {
   background-color: var(--background-color) !important;
   color: var(--text-primary) !important;
 }
 
-/* Preserve loading spinners */
+/* ===== LOADING SPINNERS ===== */
 .animate-spin {
-  /* Keep as is */
+  /* Keep as is - preserve animation */
 }
 
-/* Preserve badges with specific colors */
-.bg-red-500,
-.bg-green-500,
-.bg-blue-500,
-.bg-amber-500 {
-  /* Keep status colors as is */
+/* ===== SCROLLBAR ===== */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
 }
 
-/* Ensure backdrop */
+::-webkit-scrollbar-track {
+  background: var(--surface-color);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--primary-color);
+  border-radius: 5px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-color);
+}
+
+/* ===== TABLES ===== */
+table {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+}
+
+thead,
+th {
+  background-color: var(--surface-color) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+tbody tr {
+  border-color: var(--border-color) !important;
+}
+
+tbody tr:hover {
+  background-color: var(--surface-color) !important;
+}
+
+/* ===== ENSURE BACKDROP BLUR ===== */
 [class*="backdrop-blur"] {
   background-color: var(--card-bg) !important;
   opacity: 0.95;
+}
+
+/* ===== SPECIFIC PAGE SECTIONS ===== */
+#contact,
+#about,
+#products {
+  color: var(--text-primary) !important;
+}
+
+#contact .card,
+#contact input,
+#contact textarea,
+#about .card {
+  background-color: var(--card-bg) !important;
+  color: var(--text-primary) !important;
+  border-color: var(--border-color) !important;
+}
+
+/* ===== ACCESSIBILITY ===== */
+/* Focus visible for keyboard navigation */
+*:focus-visible {
+  outline: 2px solid var(--primary-color);
+  outline-offset: 2px;
+}
+
+/* Ensure links are visible */
+a {
+  color: var(--primary-color);
+}
+
+a:hover {
+  opacity: 0.8;
+}
+
+/* ===== COMPATIBILITY ===== */
+/* Ensure compatibility with older browsers */
+@supports not (backdrop-filter: blur(10px)) {
+  header,
+  nav {
+    background-color: var(--card-bg) !important;
+  }
 }

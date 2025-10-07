@@ -546,18 +546,18 @@ const ProductCard = ({ product }) => {
 // Hero Section Component
 const HeroSection = () => {
   return (
-    <section className="relative min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 overflow-hidden" id="home">
+    <section className="relative min-h-[70vh] md:min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 overflow-hidden" id="home">
       {/* Background Pattern */}
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(251,146,60,0.1)_0%,transparent_50%)]"></div>
       
-      <div className="container mx-auto px-4 py-20 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <Badge className="bg-orange-100 text-orange-700 border-orange-200" data-testid="hero-badge">
+      <div className="container mx-auto px-4 py-12 md:py-20 relative z-10">
+        <div className="grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
+          <div className="space-y-6 md:space-y-8 text-center lg:text-left">
+            <div className="space-y-3 md:space-y-4">
+              <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs md:text-sm" data-testid="hero-badge">
                 🎉 Festival Special Offers Available
               </Badge>
-              <h1 className="text-5xl lg:text-6xl font-bold leading-tight">
+              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
                 <span className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 bg-clip-text text-transparent">
                   Premium
                 </span>
@@ -568,26 +568,26 @@ const HeroSection = () => {
                   & Delights
                 </span>
               </h1>
-              <p className="text-xl text-gray-600 max-w-lg">
+              <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-lg mx-auto lg:mx-0">
                 Experience the authentic taste of traditional Indian mithai and namkeen, 
                 crafted with love and the finest ingredients.
               </p>
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center lg:justify-start">
               <Button 
                 size="lg" 
-                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-8 py-4 text-lg"
+                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-6 md:px-8 py-3 md:py-4 text-base md:text-lg w-full sm:w-auto"
                 data-testid="shop-now-button"
                 onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
               >
                 Shop Now
-                <ChevronRight className="ml-2 w-5 h-5" />
+                <ChevronRight className="ml-2 w-4 h-4 md:w-5 md:h-5" />
               </Button>
               <Button 
                 variant="outline" 
                 size="lg" 
-                className="border-orange-300 text-orange-700 hover:bg-orange-50 px-8 py-4 text-lg"
+                className="border-orange-300 text-orange-700 hover:bg-orange-50 px-6 md:px-8 py-3 md:py-4 text-base md:text-lg w-full sm:w-auto"
                 data-testid="explore-button"
                 onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
               >
@@ -596,35 +596,35 @@ const HeroSection = () => {
             </div>
 
             {/* Stats */}
-            <div className="grid grid-cols-3 gap-6 pt-8 border-t border-orange-200">
+            <div className="grid grid-cols-3 gap-3 md:gap-6 pt-6 md:pt-8 border-t border-orange-200">
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600" data-testid="happy-customers-count">5K+</div>
-                <div className="text-sm text-gray-600">Happy Customers</div>
+                <div className="text-xl md:text-2xl font-bold text-orange-600" data-testid="happy-customers-count">5K+</div>
+                <div className="text-xs md:text-sm text-gray-600">Happy Customers</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600" data-testid="products-count">50+</div>
-                <div className="text-sm text-gray-600">Premium Products</div>
+                <div className="text-xl md:text-2xl font-bold text-orange-600" data-testid="products-count">50+</div>
+                <div className="text-xs md:text-sm text-gray-600">Premium Products</div>
               </div>
               <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600" data-testid="cities-count">10+</div>
-                <div className="text-sm text-gray-600">Cities Served</div>
+                <div className="text-xl md:text-2xl font-bold text-orange-600" data-testid="cities-count">10+</div>
+                <div className="text-xs md:text-sm text-gray-600">Cities Served</div>
               </div>
             </div>
           </div>
 
           {/* Hero Image */}
-          <div className="relative">
+          <div className="relative mt-8 lg:mt-0 order-first lg:order-last">
             <div className="relative rounded-2xl overflow-hidden shadow-2xl">
               <img 
                 src="/mithaas_delights.png"
                 alt="Premium Indian Sweets"
-                className="w-full h-96 lg:h-[500px] object-cover"
+                className="w-full h-64 sm:h-80 md:h-96 lg:h-[500px] object-cover"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
             </div>
-            {/* Floating Elements */}
-            <div className="absolute -top-4 -right-4 w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full opacity-20 animate-pulse"></div>
-            <div className="absolute -bottom-6 -left-6 w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full opacity-30 animate-pulse delay-1000"></div>
+            {/* Floating Elements - Hidden on mobile for better performance */}
+            <div className="hidden md:block absolute -top-4 -right-4 w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full opacity-20 animate-pulse"></div>
+            <div className="hidden md:block absolute -bottom-6 -left-6 w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full opacity-30 animate-pulse delay-1000"></div>
           </div>
         </div>
       </div>
@@ -684,33 +684,34 @@ const ProductsSection = () => {
   };
 
   return (
-    <section className="py-20 bg-white" id="products">
+    <section className="py-12 md:py-20 bg-white" id="products">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-12">
-          <Badge className="bg-orange-100 text-orange-700 mb-4">Our Products</Badge>
-          <h2 className="text-4xl font-bold text-gray-800 mb-4">
+        <div className="text-center mb-8 md:mb-12">
+          <Badge className="bg-orange-100 text-orange-700 mb-3 md:mb-4 text-xs md:text-sm">Our Products</Badge>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-3 md:mb-4">
             Premium Collection of
             <span className="block bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
               Sweets & Snacks
             </span>
           </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+          <p className="text-sm md:text-base text-gray-600 max-w-2xl mx-auto px-4">
             Discover our handcrafted selection of traditional Indian sweets and savory snacks, 
             made with authentic recipes and the finest ingredients.
           </p>
         </div>
 
         {/* Category Filter */}
-        <div className="flex flex-wrap justify-center gap-3 mb-12">
+        <div className="flex flex-wrap justify-center gap-2 md:gap-3 mb-8 md:mb-12">
           {categories.map((category) => (
             <Button
               key={category.value}
               variant={selectedCategory === category.value ? "default" : "outline"}
+              size="sm"
               onClick={() => setSelectedCategory(category.value)}
-              className={selectedCategory === category.value 
+              className={`text-xs md:text-sm ${selectedCategory === category.value 
                 ? "bg-orange-500 hover:bg-orange-600" 
                 : "border-orange-200 text-orange-700 hover:bg-orange-50"
-              }
+              }`}
               data-testid={`category-filter-${category.value}`}
             >
               {category.label}
@@ -720,11 +721,11 @@ const ProductsSection = () => {
 
         {/* Products Grid */}
         {loading ? (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6">
             {[...Array(8)].map((_, i) => (
               <Card key={i} className="animate-pulse">
-                <div className="h-48 bg-gray-200"></div>
-                <CardContent className="p-4 space-y-2">
+                <div className="h-40 md:h-48 bg-gray-200"></div>
+                <CardContent className="p-3 md:p-4 space-y-2">
                   <div className="h-4 bg-gray-200 rounded"></div>
                   <div className="h-3 bg-gray-200 rounded w-3/4"></div>
                   <div className="h-6 bg-gray-200 rounded w-1/2"></div>
@@ -733,7 +734,7 @@ const ProductsSection = () => {
             ))}
           </div>
         ) : (
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6" data-testid="products-grid">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6" data-testid="products-grid">
             {products.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
@@ -741,8 +742,8 @@ const ProductsSection = () => {
         )}
 
         {!loading && products.length === 0 && (
-          <div className="text-center py-12">
-            <p className="text-gray-500">No products found in this category.</p>
+          <div className="text-center py-8 md:py-12">
+            <p className="text-gray-500 text-sm md:text-base">No products found in this category.</p>
           </div>
         )}
       </div>
@@ -846,21 +847,21 @@ const ContactSection = () => {
   };
 
   return (
-    <section className="py-20 bg-white" id="contact">
+    <section className="py-12 md:py-20 bg-white" id="contact">
       <div className="container mx-auto px-4">
-        <div className="text-center mb-12">
-          <Badge className="bg-orange-100 text-orange-700 mb-4">Get In Touch</Badge>
-          <h2 className="text-4xl font-bold text-gray-800 mb-4">
+        <div className="text-center mb-8 md:mb-12">
+          <Badge className="bg-orange-100 text-orange-700 mb-3 md:mb-4 text-xs md:text-sm">Get In Touch</Badge>
+          <h2 className="text-2xl sm:text-3xl md:text-4xl font-bold text-gray-800 mb-3 md:mb-4">
             Contact
             <span className="bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent"> Us</span>
           </h2>
-          <p className="text-gray-600 max-w-2xl mx-auto">
+          <p className="text-sm md:text-base text-gray-600 max-w-2xl mx-auto px-4">
             Have questions about our products or need help with your order? 
             We're here to help you every step of the way.
           </p>
         </div>
 
-        <div className="grid lg:grid-cols-2 gap-12">
+        <div className="grid lg:grid-cols-2 gap-8 md:gap-12">
           {/* Contact Info */}
           <div className="space-y-6">
             <div className="flex items-start space-x-4">
@@ -967,28 +968,30 @@ const ContactSection = () => {
 // Footer Component
 const Footer = () => {
   return (
-    <footer className="bg-gray-900 text-white py-12">
+    <footer className="bg-gray-900 text-white py-8 md:py-12">
       <div className="container mx-auto px-4">
-        <div className="grid md:grid-cols-4 gap-8 mb-8">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 md:gap-8 mb-6 md:mb-8">
           <div>
-            <div className="flex items-center space-x-2 mb-4">
-              <div className="w-8 h-8 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold">M</span>
-              </div>
-              <span className="text-xl font-bold">Mithaas Delights</span>
+            <div className="mb-4">
+              <img 
+                src="/mithaas-logo.png" 
+                alt="Mithaas Delights Logo" 
+                className="w-16 h-16 object-contain mb-2"
+              />
+              <span className="text-xl font-bold block">Mithaas Delights</span>
             </div>
-            <p className="text-gray-400 mb-4">
+            <p className="text-white mb-4">
               Premium Indian sweets and snacks crafted with love and tradition.
             </p>
             <div className="bg-orange-900/30 px-3 py-2 rounded-lg">
               <p className="text-xs font-semibold text-orange-300 mb-1">FSSAI License</p>
-              <p className="text-sm text-gray-300">12345678901234</p>
+              <p className="text-sm text-white">21425850011554</p>
             </div>
           </div>
           
           <div>
             <h4 className="font-semibold mb-4">Quick Links</h4>
-            <ul className="space-y-2 text-gray-400">
+            <ul className="space-y-2 text-white">
               <li><a href="#home" className="hover:text-orange-400 transition-colors">Home</a></li>
               <li><a href="#products" className="hover:text-orange-400 transition-colors">Products</a></li>
               <li><a href="#about" className="hover:text-orange-400 transition-colors">About</a></li>
@@ -998,7 +1001,7 @@ const Footer = () => {
           
           <div>
             <h4 className="font-semibold mb-4">Legal</h4>
-            <ul className="space-y-2 text-gray-400">
+            <ul className="space-y-2 text-white">
               <li><a href="/terms" className="hover:text-orange-400 transition-colors">Terms & Conditions</a></li>
               <li><a href="/privacy" className="hover:text-orange-400 transition-colors">Privacy Policy</a></li>
               <li><a href="/track-order" className="hover:text-orange-400 transition-colors">Track Order</a></li>
@@ -1008,7 +1011,7 @@ const Footer = () => {
           
           <div>
             <h4 className="font-semibold mb-4">Connect</h4>
-            <ul className="space-y-2 text-gray-400">
+            <ul className="space-y-2 text-white">
               <li><a href="https://www.instagram.com/mithaasdelightsofficial?igsh=aW85Z2h6bTEwazJv" className="hover:text-orange-400 transition-colors">Instagram</a></li>
               <li><a href="https://wa.me/918989549544" target="_blank" rel="noopener noreferrer" className="hover:text-orange-400 transition-colors">WhatsApp</a></li>
               <li><a href="#" className="hover:text-orange-400 transition-colors">Facebook</a></li>
@@ -1017,7 +1020,7 @@ const Footer = () => {
           </div>
         </div>
         
-        <div className="border-t border-gray-800 pt-8 text-center text-gray-400">
+        <div className="border-t border-white pt-8 text-center to-white">
           <p>&copy; 2025 Mithaas Delights. All rights reserved. Made with ❤️ in India.</p>
           <p className="text-xs mt-2">Certified by Food Safety and Standards Authority of India</p>
         </div>
@@ -1318,7 +1321,7 @@ const ProfilePage = () => {
                                 <p className="text-sm text-gray-600 mb-2 font-medium">Order Items:</p>
                                 {order.items.map((item, idx) => (
                                   <div key={idx} className="flex justify-between text-sm py-1">
-                                    <span className="text-gray-700">{item.variant_weight} × {item.quantity}</span>
+                                    <span className="text-black">{item.variant_weight} × {item.quantity}</span>
                                     <span className="font-medium">₹{(item.price * item.quantity).toFixed(2)}</span>
                                   </div>
                                 ))}

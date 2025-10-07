@@ -47,7 +47,20 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Login failed',
+        error: (() => {
+          let errorMessage = 'Login failed';
+          if (error.response?.data?.detail) {
+            // Handle both string and array/object error formats
+            if (typeof error.response.data.detail === 'string') {
+              errorMessage = error.response.data.detail;
+            } else if (Array.isArray(error.response.data.detail)) {
+              errorMessage = error.response.data.detail.map(e => e.msg || e).join(', ');
+            } else {
+              errorMessage = JSON.stringify(error.response.data.detail);
+            }
+          }
+          return errorMessage;
+        })(),
       };
     }
   };
@@ -69,7 +82,20 @@ export const AuthProvider = ({ children }) => {
     } catch (error) {
       return {
         success: false,
-        error: error.response?.data?.detail || 'Registration failed',
+        error: (() => {
+          let errorMessage = 'Registration failed';
+          if (error.response?.data?.detail) {
+            // Handle both string and array/object error formats
+            if (typeof error.response.data.detail === 'string') {
+              errorMessage = error.response.data.detail;
+            } else if (Array.isArray(error.response.data.detail)) {
+              errorMessage = error.response.data.detail.map(e => e.msg || e).join(', ');
+            } else {
+              errorMessage = JSON.stringify(error.response.data.detail);
+            }
+          }
+          return errorMessage;
+        })(),
       };
     }
   };
