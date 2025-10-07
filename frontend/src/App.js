@@ -26,6 +26,7 @@ import { NotificationSystem } from "./components/NotificationSystem";
 import { ThemeSwitcher } from "./components/ThemeSwitcher";
 import { VoiceChatBot } from "./components/VoiceChatBot";
 import { AdvertisementSection } from "./components/AdvertisementSection";
+import { MarqueeAnnouncements } from "./components/MarqueeAnnouncements";
 import { HeaderLogo } from "./components/Logo";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
@@ -440,17 +441,32 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   return children;
 };
 
-// Product Card Component
+// Enhanced Product Card Component with Offers Support
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
   const { user, isAuthenticated } = useAuth();
   const [isInWishlist, setIsInWishlist] = useState(false);
+  const [activeOffers, setActiveOffers] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (user && user.wishlist) {
       setIsInWishlist(user.wishlist.includes(product.id));
     }
   }, [user, product.id]);
+  useEffect(() => {
+    fetchActiveOffers();
+  }, [product.id]);
+
+  const fetchActiveOffers = async () => {
+    try {
+      const response = await axios.get(`${API}/offers/active?product_id=${product.id}`);
+      setActiveOffers(response.data);
+    } catch (error) {
+      console.error('Error fetching offers:', error);
+      setActiveOffers([]);
+    }
+  };
 
   const toggleWishlist = async () => {
     if (!isAuthenticated) {
@@ -458,6 +474,7 @@ const ProductCard = ({ product }) => {
       return;
     }
 
+    setLoading(true);
     try {
       const token = localStorage.getItem('token');
       if (isInWishlist) {
@@ -476,6 +493,8 @@ const ProductCard = ({ product }) => {
     } catch (error) {
       console.error('Wishlist error:', error);
       toast.error('Failed to update wishlist');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -486,13 +505,57 @@ const ProductCard = ({ product }) => {
     }
     return product.price || 0;
   };
+  // Calculate offer discount
+  const calculateBestOffer = () => {
+    if (activeOffers.length === 0) return null;
+    
+    const minPrice = getMinPrice();
+    let bestDiscount = 0;
+    let bestOffer = null;
+
+    activeOffers.forEach(offer => {
+      let discount = 0;
+      if (offer.offer_type === 'percentage') {
+        discount = (minPrice * offer.discount_percentage) / 100;
+        if (offer.max_discount && discount > offer.max_discount) {
+          discount = offer.max_discount;
+        }
+      } else if (offer.offer_type === 'flat_discount') {
+        discount = Math.min(offer.discount_amount, minPrice);
+      }
+      
+      if (discount > bestDiscount) {
+        bestDiscount = discount;
+        bestOffer = offer;
+      }
+    });
+
+    return bestOffer ? { offer: bestOffer, discount: bestDiscount } : null;
+  };
+
+  const bestOffer = calculateBestOffer();
+  const finalPrice = bestOffer ? getMinPrice() - bestOffer.discount : getMinPrice();
 
   const handleViewDetails = () => {
     window.location.href = `/product/${product.id}`;
   };
+  const getBadgeText = (offer) => {
+    if (offer.badge_text) return offer.badge_text;
+    
+    switch (offer.offer_type) {
+      case 'percentage':
+        return `${offer.discount_percentage}% OFF`;
+      case 'flat_discount':
+        return `₹${offer.discount_amount} OFF`;
+      case 'buy_x_get_y':
+        return `Buy ${offer.buy_quantity} Get ${offer.get_quantity}`;
+      default:
+        return 'OFFER';
+    }
+  };
 
   return (
-    <Card className="group overflow-hidden hover:shadow-lg transition-shadow duration-300 bg-white border border-amber-100" data-testid="product-card">
+    <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 bg-white border border-amber-100 hover:border-orange-200 relative" data-testid="product-card">
       <div 
         className="relative overflow-hidden cursor-pointer"
         onClick={handleViewDetails}
@@ -500,69 +563,129 @@ const ProductCard = ({ product }) => {
         <img 
           src={product.image_url} 
           alt={product.name}
-          className="w-full h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+          className="w-full h-40 sm:h-44 md:h-48 object-cover transition-transform duration-300 group-hover:scale-105"
         />
-        {product.discount_percentage && (
-          <Badge className="absolute top-2 right-2 bg-red-500 text-white">
-            {product.discount_percentage}% OFF
-          </Badge>
+        
+        {/* Offer Badges */}
+        {activeOffers.length > 0 && (
+          <div className="absolute top-2 left-2 z-10">
+            <Badge 
+              className="mb-1 shadow-lg font-bold text-xs px-2 py-1"
+              style={{ 
+                backgroundColor: activeOffers[0].badge_color || '#f97316',
+                color: '#ffffff'
+              }}
+            >
+              {getBadgeText(activeOffers[0])}
+            </Badge>
+            {activeOffers.length > 1 && (
+              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-0.5 shadow-lg">
+                +{activeOffers.length - 1} more
+              </Badge>
+            )}
+          </div>
         )}
-        {product.is_featured && (
-          <Badge className="absolute top-2 left-2 bg-amber-500 text-white">
-            Featured
-          </Badge>
-        )}
+
+        {/* Other badges */}
+        <div className="absolute top-2 right-2 space-y-1">
+            <Badge className="bg-red-500 text-white shadow-lg">
+              {product.discount_percentage}% OFF
+            </Badge>
+          )}
+          {product.is_featured && (
+            <Badge className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg">
+              Featured
+            </Badge>
+          )}
+        </div>
         {product.is_sold_out && (
-          <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-            <Badge className="bg-red-600 text-white">SOLD OUT</Badge>
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
+            <Badge className="bg-red-600 text-white text-lg px-4 py-2 shadow-lg">SOLD OUT</Badge>
           </div>
         )}
         <Button
           variant="ghost"
           size="sm"
-          className="absolute bottom-2 right-2 bg-white/90 hover:bg-white"
+          disabled={loading}
+          className="absolute bottom-2 right-2 bg-white/90 hover:bg-white rounded-full w-8 h-8 p-0 shadow-lg transition-all duration-200 hover:scale-105"
           onClick={(e) => {
             e.stopPropagation();
             toggleWishlist();
           }}
           data-testid="wishlist-toggle-button"
         >
-          <Heart className={`w-5 h-5 ${isInWishlist ? 'fill-red-500 text-red-500' : 'text-gray-600'}`} />
+          <Heart className={`w-4 h-4 transition-all duration-200 ${
+            loading ? 'animate-pulse text-gray-400' : 
+            isInWishlist ? 'fill-red-500 text-red-500' : 'text-gray-600 hover:text-red-500'
+          }`} />
         </Button>
       </div>
-      <CardContent className="p-4">
+      <CardContent className="p-3 sm:p-4">
         <h3 
-          className="font-semibold text-lg text-gray-800 mb-2 cursor-pointer hover:text-orange-600 transition-colors" 
+          className="font-semibold text-base sm:text-lg text-gray-800 mb-2 cursor-pointer hover:text-orange-600 transition-colors line-clamp-1" 
           data-testid="product-name"
           onClick={handleViewDetails}
         >
           {product.name}
         </h3>
-        <p className="text-gray-600 text-sm mb-3 line-clamp-2">{product.description}</p>
+        <p className="text-gray-600 text-xs sm:text-sm mb-3 line-clamp-2 leading-relaxed">{product.description}</p>
+        
         <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center space-x-2">
-            <span className="text-xl font-bold text-orange-600" data-testid="product-price">
-              From ₹{getMinPrice()}
-            </span>
+          <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
+            {bestOffer ? (
+              <>
+                <span className="text-lg sm:text-xl font-bold text-orange-600" data-testid="product-price">
+                  ₹{finalPrice.toFixed(0)}
+                </span>
+                <span className="text-xs sm:text-sm text-gray-400 line-through">
+                  ₹{getMinPrice()}
+                </span>
+              </>
+            ) : (
+              <span className="text-lg sm:text-xl font-bold text-orange-600" data-testid="product-price">
+                From ₹{getMinPrice()}
+              </span>
+            )}
           </div>
           {product.variants && product.variants.length > 0 && (
-            <span className="text-xs text-gray-500">{product.variants.length} variants</span>
+            <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full">
+              {product.variants.length} options
+            </span>
           )}
         </div>
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-1">
-            <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
-            <span className="text-sm text-gray-600">{product.rating || 4.5} ({product.review_count || 0})</span>
+            <div className="flex items-center">
+              {[...Array(5)].map((_, i) => (
+                <Star 
+                  key={i} 
+                  className={`w-3 h-3 ${
+                    i < Math.floor(product.rating || 4.5) 
+                      ? 'fill-amber-400 text-amber-400' 
+                      : 'text-gray-300'
+                  }`} 
+                />
+              ))}
+            </div>
+            <span className="text-xs text-gray-600 ml-1">
+              ({product.review_count || 0})
+            </span>
           </div>
           <Button 
             size="sm" 
             onClick={handleViewDetails}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white"
+            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 transition-all duration-200 hover:scale-105 shadow-lg"
             data-testid="view-details-button"
           >
             View Details
           </Button>
         </div>
+        
+        {bestOffer && (
+          <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full text-center font-medium">
+            Save ₹{bestOffer.discount.toFixed(0)} with this offer!
+          </div>
+        )}
       </CardContent>
     </Card>
   );
@@ -1508,6 +1631,7 @@ const Home = () => {
   return (
     <div className="min-h-screen bg-white">
       <Header />
+      <MarqueeAnnouncements />
       <HeroSection />
       <div className="container mx-auto px-4 py-8">
         <BannerCarousel />
