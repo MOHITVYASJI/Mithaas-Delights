@@ -2523,6 +2523,55 @@ const SettingsManagement = () => {
       setLoading(false);
     }
   };
+  const initializeDefaultThemes = async () => {
+    try {
+      setLoading(true);
+      const response = await axios.post(`${API}/settings/themes/initialize`, {}, {
+        headers: getAuthHeaders()
+      });
+      setThemes(response.data);
+      toast.success('Default themes initialized successfully');
+    } catch (error) {
+      console.error('Error initializing themes:', error);
+      toast.error('Failed to initialize default themes');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const activateTheme = async (themeId) => {
+    try {
+      setLoading(true);
+      await axios.put(`${API}/settings/themes/${themeId}/activate`, {}, {
+        headers: getAuthHeaders()
+      });
+      toast.success('Theme activated successfully');
+      fetchThemes();
+    } catch (error) {
+      console.error('Error activating theme:', error);
+      toast.error('Failed to activate theme');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deleteTheme = async (themeId) => {
+    if (window.confirm('Are you sure you want to delete this theme?')) {
+      try {
+        setLoading(true);
+        await axios.delete(`${API}/settings/themes/${themeId}`, {
+          headers: getAuthHeaders()
+        });
+        toast.success('Theme deleted successfully');
+        fetchThemes();
+      } catch (error) {
+        console.error('Error deleting theme:', error);
+        toast.error('Failed to delete theme');
+      } finally {
+        setLoading(false);
+      }
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -2551,42 +2600,178 @@ const SettingsManagement = () => {
         <TabsContent value="themes">
           <Card>
             <CardHeader>
-              <CardTitle>Theme Management</CardTitle>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle>Theme Management</CardTitle>
+                  <p className="text-sm text-gray-600 mt-1">
+                    Control your store's appearance, colors, and festival themes. Changes apply instantly across the entire website.
+                  </p>
+                </div>
+                <Button 
+                  onClick={initializeDefaultThemes}
+                  variant="outline"
+                  size="sm"
+                  disabled={loading}
+                  className="flex items-center gap-2"
+                >
+                  <Palette className="w-4 h-4" />
+                  Initialize Default Themes
+                </Button>
+              </div>
             </CardHeader>
             <CardContent>
-              <p className="text-gray-600 mb-4">
-                Control your store's appearance, colors, and festival themes without touching code.
-              </p>
-              <div className="space-y-4">
-                {themes.map((theme) => (
-                  <div key={theme.id} className="flex items-center justify-between p-4 border rounded-lg">
-                    <div>
-                      <h4 className="font-semibold">{theme.theme_name}</h4>
-                      <div className="flex items-center space-x-2 mt-2">
-                        <div 
-                          className="w-6 h-6 rounded-full border" 
-                          style={{backgroundColor: theme.primary_color}}
-                        />
-                        <div 
-                          className="w-6 h-6 rounded-full border" 
-                          style={{backgroundColor: theme.secondary_color}}
-                        />
-                        <div 
-                          className="w-6 h-6 rounded-full border" 
-                          style={{backgroundColor: theme.accent_color}}
-                        />
+              {loading ? (
+                <div className="flex items-center justify-center py-12">
+                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500"></div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {themes.map((theme) => (
+                    <div 
+                      key={theme.id} 
+                      className={`relative p-4 border-2 rounded-lg transition-all hover:shadow-lg ${
+                        theme.is_active ? 'border-green-500 bg-green-50' : 'border-gray-200'
+                      }`}
+                      data-testid={`theme-card-${theme.name}`}
+                    >
+                      {/* Active Badge */}
+                      {theme.is_active && (
+                        <div className="absolute top-2 right-2">
+                          <Badge className="bg-green-500 text-white">Active</Badge>
+                        </div>
+                      )}
+                      
+                      {/* Theme Header */}
+                      <div className="mb-3">
+                        <h4 className="font-bold text-lg mb-1">{theme.display_name}</h4>
+                        {theme.description && (
+                          <p className="text-xs text-gray-500 line-clamp-2">{theme.description}</p>
+                        )}
+                        {theme.festival_mode && theme.festival_name && (
+                          <Badge variant="outline" className="mt-2 text-xs">
+                            🎉 {theme.festival_name}
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Color Preview */}
+                      <div className="mb-3">
+                        <p className="text-xs font-medium text-gray-600 mb-2">Color Palette:</p>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <div className="flex flex-col items-center">
+                            <div 
+                              className="w-10 h-10 rounded-lg border-2 border-gray-300 shadow-sm" 
+                              style={{backgroundColor: theme.colors?.primary || '#f97316'}}
+                              title="Primary"
+                            />
+                            <span className="text-xs text-gray-500 mt-1">Primary</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div 
+                              className="w-10 h-10 rounded-lg border-2 border-gray-300 shadow-sm" 
+                              style={{backgroundColor: theme.colors?.secondary || '#f59e0b'}}
+                              title="Secondary"
+                            />
+                            <span className="text-xs text-gray-500 mt-1">Secondary</span>
+                          </div>
+                          <div className="flex flex-col items-center">
+                            <div 
+                              className="w-10 h-10 rounded-lg border-2 border-gray-300 shadow-sm" 
+                              style={{backgroundColor: theme.colors?.accent || '#ea580c'}}
+                              title="Accent"
+                            />
+                            <span className="text-xs text-gray-500 mt-1">Accent</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Full Color Details (Expandable) */}
+                      <details className="mb-3">
+                        <summary className="text-xs font-medium text-gray-600 cursor-pointer hover:text-orange-600">
+                          View All Colors
+                        </summary>
+                        <div className="mt-2 space-y-1 text-xs">
+                          <div className="flex justify-between">
+                            <span>Background:</span>
+                            <code className="bg-gray-100 px-1 rounded">{theme.colors?.background}</code>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Surface:</span>
+                            <code className="bg-gray-100 px-1 rounded">{theme.colors?.surface}</code>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Text Primary:</span>
+                            <code className="bg-gray-100 px-1 rounded">{theme.colors?.text_primary}</code>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Border:</span>
+                            <code className="bg-gray-100 px-1 rounded">{theme.colors?.border}</code>
+                          </div>
+                        </div>
+                      </details>
+
+                      {/* Action Buttons */}
+                      <div className="flex gap-2 mt-4">
+                        {!theme.is_active && (
+                          <Button
+                            onClick={() => activateTheme(theme.id)}
+                            size="sm"
+                            className="flex-1 bg-orange-500 hover:bg-orange-600"
+                            disabled={loading}
+                            data-testid={`activate-theme-${theme.name}`}
+                          >
+                            Activate
+                          </Button>
+                        )}
+                        {theme.is_active && (
+                          <Button
+                            size="sm"
+                            className="flex-1 bg-green-500"
+                            disabled
+                          >
+                            ✓ Currently Active
+                          </Button>
+                        )}
+                        {!theme.is_default && !theme.is_active && (
+                          <Button
+                            onClick={() => deleteTheme(theme.id)}
+                            size="sm"
+                            variant="destructive"
+                            disabled={loading}
+                            data-testid={`delete-theme-${theme.name}`}
+                          >
+                            Delete
+                          </Button>
+                        )}
                       </div>
                     </div>
-                    {theme.is_active ? (
-                      <Badge className="bg-green-500">Active</Badge>
-                    ) : (
-                      <Button size="sm" variant="outline">Activate</Button>
-                    )}
-                  </div>
-                ))}
-                {themes.length === 0 && !loading && (
-                  <p className="text-center text-gray-500 py-8">No themes configured yet</p>
-                )}
+                  ))}
+                </div>
+              )}
+
+              {!loading && themes.length === 0 && (
+                <div className="text-center py-12">
+                  <Palette className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                  <p className="text-gray-500 mb-4">No themes found</p>
+                  <Button 
+                    onClick={initializeDefaultThemes}
+                    className="bg-orange-500 hover:bg-orange-600"
+                  >
+                    Initialize Default Themes
+                  </Button>
+                </div>
+              )}
+
+              {/* Info Box */}
+              <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <h5 className="font-semibold text-blue-900 mb-2">📝 Theme Information</h5>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• <strong>Users</strong> can only toggle between Dark and Light modes</li>
+                  <li>• <strong>Admin</strong> controls the global theme and color palette</li>
+                  <li>• Theme changes apply <strong>instantly</strong> across the entire website</li>
+                  <li>• Festival themes include special decorations and effects</li>
+                  <li>• Default themes cannot be deleted, only deactivated</li>
+                </ul>
               </div>
             </CardContent>
           </Card>

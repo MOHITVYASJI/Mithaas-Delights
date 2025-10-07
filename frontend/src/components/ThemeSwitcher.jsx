@@ -371,7 +371,6 @@ export const ThemeSwitcher = () => {
       // Apply admin's global theme with user's mode preference
       const savedMode = localStorage.getItem('user-theme-mode') || 'light';
       applyThemeWithMode(theme, savedMode);
-      setActiveTheme(theme.name || theme.display_name || 'default');
     } catch (error) {
       console.error('Error loading theme:', error);
       // Apply default theme
@@ -406,14 +405,6 @@ export const ThemeSwitcher = () => {
     }
   };
 
-  const fetchCustomThemes = async () => {
-    try {
-      const response = await axios.get(`${API}/themes`);
-      setCustomThemes(response.data || []);
-    } catch (error) {
-      console.error('Error fetching custom themes:', error);
-    }
-  };
 
   const applyDefaultTheme = (mode) => {
     const defaultColors = {
