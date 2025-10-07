@@ -2470,7 +2470,7 @@ const SettingsManagement = () => {
   const fetchThemes = async () => {
     try {
       setLoading(true);
-      const response = await axios.get(`${API}/settings/themes`, {
+      const response = await axios.get(`${API}/themes`, {
         headers: getAuthHeaders()
       });
       setThemes(response.data);
@@ -2526,11 +2526,11 @@ const SettingsManagement = () => {
   const initializeDefaultThemes = async () => {
     try {
       setLoading(true);
-      const response = await axios.post(`${API}/settings/themes/initialize`, {}, {
+      const response = await axios.post(`${API}/themes/initialize-defaults`, {}, {
         headers: getAuthHeaders()
       });
-      setThemes(response.data);
-      toast.success('Default themes initialized successfully');
+      toast.success(response.data.message || 'Default themes initialized successfully');
+      await fetchThemes(); // Fetch themes after initialization
     } catch (error) {
       console.error('Error initializing themes:', error);
       toast.error('Failed to initialize default themes');
@@ -2542,7 +2542,7 @@ const SettingsManagement = () => {
   const activateTheme = async (themeId) => {
     try {
       setLoading(true);
-      await axios.put(`${API}/settings/themes/${themeId}/activate`, {}, {
+      await axios.put(`${API}/themes/${themeId}/activate`, {}, {
         headers: getAuthHeaders()
       });
       toast.success('Theme activated successfully');
@@ -2559,7 +2559,7 @@ const SettingsManagement = () => {
     if (window.confirm('Are you sure you want to delete this theme?')) {
       try {
         setLoading(true);
-        await axios.delete(`${API}/settings/themes/${themeId}`, {
+        await axios.delete(`${API}/themes/${themeId}`, {
           headers: getAuthHeaders()
         });
         toast.success('Theme deleted successfully');
