@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useCart } from '../App';
 import { useAuth } from '../contexts/AuthContext';
 import { RazorpayCheckout } from './RazorpayCheckout';
+import { CheckoutSecurityBadge } from './SecurePaymentBadges';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -661,49 +662,54 @@ const CheckoutForm = ({ cartItems, totalAmount, onSuccess }) => {
 
             {/* Step 3: Payment */}
             {currentStep === 3 && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center">
-                    <CreditCard className="w-5 h-5 mr-2" />
-                    Payment Method
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="space-y-3">
-                    <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="cod"
-                        checked={formData.paymentMethod === 'cod'}
-                        onChange={handleChange}
-                        className="text-orange-600"
-                        data-testid="cod-payment-radio"
-                      />
-                      <div>
-                        <div className="font-medium">Cash on Delivery</div>
-                        <div className="text-sm text-gray-600">Pay when your order arrives</div>
-                      </div>
-                    </label>
-                    
-                    <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                      <input
-                        type="radio"
-                        name="paymentMethod"
-                        value="razorpay"
-                        checked={formData.paymentMethod === 'razorpay'}
-                        onChange={handleChange}
-                        className="text-orange-600"
-                        data-testid="razorpay-payment-radio"
-                      />
-                      <div>
-                        <div className="font-medium">Online Payment (Razorpay)</div>
-                        <div className="text-sm text-gray-600">Pay securely with UPI, Cards, Netbanking</div>
-                      </div>
-                    </label>
-                  </div>
-                </CardContent>
-              </Card>
+              <>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="flex items-center">
+                      <CreditCard className="w-5 h-5 mr-2" />
+                      Payment Method
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="space-y-3">
+                      <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="cod"
+                          checked={formData.paymentMethod === 'cod'}
+                          onChange={handleChange}
+                          className="text-orange-600"
+                          data-testid="cod-payment-radio"
+                        />
+                        <div>
+                          <div className="font-medium">Cash on Delivery</div>
+                          <div className="text-sm text-gray-600">Pay when your order arrives</div>
+                        </div>
+                      </label>
+                      
+                      <label className="flex items-center space-x-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                        <input
+                          type="radio"
+                          name="paymentMethod"
+                          value="razorpay"
+                          checked={formData.paymentMethod === 'razorpay'}
+                          onChange={handleChange}
+                          className="text-orange-600"
+                          data-testid="razorpay-payment-radio"
+                        />
+                        <div>
+                          <div className="font-medium">Online Payment (Razorpay)</div>
+                          <div className="text-sm text-gray-600">Pay securely with UPI, Cards, Netbanking</div>
+                        </div>
+                      </label>
+                    </div>
+                  </CardContent>
+                </Card>
+                
+                {/* Security Badge */}
+                <CheckoutSecurityBadge className="mt-4" />
+              </>
             )}
 
             {/* Navigation Buttons */}

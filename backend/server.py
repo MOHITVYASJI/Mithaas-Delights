@@ -1909,6 +1909,25 @@ async def update_order_payment(
         "payment_status": update_data.payment_status
     }
 
+@api_router.get("/orders/track/{order_id}")
+async def track_order(order_id: str):
+    """Track order status - Public endpoint"""
+    order = await db.orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    order_obj = Order(**parse_from_mongo(order))
+    
+    # Return tracking information
+    return {
+        "order_id": order_obj.id,
+        "status": order_obj.status,
+        "status_history": order_obj.status_history,
+        "payment_status": order_obj.payment_status,
+        "created_at": order_obj.created_at,
+        "updated_at": order_obj.updated_at,
+        "estimated_delivery": None  # Can be calculated based on status
+    }
 # ==================== RAZORPAY ROUTES ====================
 
 @api_router.post("/razorpay/create-order")

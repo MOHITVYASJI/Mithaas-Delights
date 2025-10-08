@@ -10,6 +10,8 @@ import { Textarea } from '../components/ui/textarea';
 import { toast } from 'sonner';
 import { useAuth } from '../contexts/AuthContext';
 import { useCart } from '../App';
+import { TrustBadges } from '../components/TrustBadges';
+import { SecurePaymentBadges } from '../components/SecurePaymentBadges';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -347,6 +349,12 @@ export const ProductDetailPage = ({ Header, Footer }) => {
               >
                 <Heart className="w-5 h-5" />
               </Button>
+            </div>
+
+            {/* Trust Badges */}
+            <div className="mb-6">
+              <TrustBadges variant="compact" className="justify-center mb-4" />
+              <SecurePaymentBadges variant="compact" />
             </div>
 
             {/* Ingredients */}

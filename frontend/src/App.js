@@ -28,6 +28,9 @@ import { UnifiedChatBot } from "./components/UnifiedChatBot";
 import { AdvertisementSection } from "./components/AdvertisementSection";
 import { MarqueeAnnouncements } from "./components/MarqueeAnnouncements";
 import { HeaderLogo } from "./components/Logo";
+import { TrustBadges } from "./components/TrustBadges";
+import { SecurePaymentBadges } from "./components/SecurePaymentBadges";
+import { CertificationShowcase } from "./components/CertificationShowcase";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
 
@@ -1131,10 +1134,6 @@ const Footer = () => {
             <p className="text-white mb-4">
               Premium Indian sweets and snacks crafted with love and tradition.
             </p>
-            <div className="bg-orange-900/30 px-3 py-2 rounded-lg">
-              <p className="text-xs font-semibold text-orange-300 mb-1">FSSAI License</p>
-              <p className="text-sm text-white">21425850011554</p>
-            </div>
           </div>
           
           <div>
@@ -1167,9 +1166,25 @@ const Footer = () => {
             </ul>
           </div>
         </div>
+
+        {/* Certificates Section - Simple and Clean */}
+        <div className="border-t border-white/20 pt-6 mb-6">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
+            <img 
+              src="/certificates/fssai-certificate.jpg" 
+              alt="FSSAI Certificate - License 21425850011554" 
+              className="h-32 md:h-40 w-auto object-contain rounded-lg shadow-lg hover:scale-105 transition-transform cursor-pointer"
+            />
+            <img 
+              src="/certificates/msme-certificate.jpg" 
+              alt="MSME Certificate - UDYAM-MP-23-0235652" 
+              className="h-32 md:h-40 w-auto object-contain rounded-lg shadow-lg hover:scale-105 transition-transform cursor-pointer"
+            />
+          </div>
+        </div>
         
-        <div className="border-t border-white pt-8 text-center to-white">
-          <p>&copy; 2025 Mithaas Delights. All rights reserved. Made with ❤️ in India.</p>
+        <div className="border-t border-white pt-8 text-center">
+          <p>&copy; 2025 Mithaas Delights. All rights reserved. Made with ❤️ in India 🇮🇳</p>
           <p className="text-xs mt-2">Certified by Food Safety and Standards Authority of India</p>
         </div>
       </div>
