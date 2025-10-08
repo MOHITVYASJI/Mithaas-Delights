@@ -31,6 +31,15 @@ import { HeaderLogo } from "./components/Logo";
 import { TrustBadges } from "./components/TrustBadges";
 import { SecurePaymentBadges } from "./components/SecurePaymentBadges";
 import { CertificationShowcase } from "./components/CertificationShowcase";
+import { SmoothScroll } from "./components/SmoothScroll";
+import { AnimatedHeroSection } from "./components/AnimatedHeroSection";
+import { AnimatedProductCard } from "./components/AnimatedProductCard";
+import { AnimatedButton } from "./components/AnimatedButton";
+import { AnimatedLogo3D } from "./components/AnimatedLogo3D";
+import { AnimatedLogoGIF } from "./components/AnimatedLogoGIF";
+import { HeroGIFBackground } from "./components/HeroGIFBackground";
+import { motion } from "framer-motion";
+import { useScrollAnimation, useStaggerAnimation } from "./hooks/useScrollAnimation";
 import "./App.css";
 import "./components/images/Premium_mithai.png";
 
@@ -205,9 +214,20 @@ const Header = () => {
     <header className="bg-white/95 backdrop-blur-md border-b border-amber-100 sticky top-0 z-50 shadow-sm">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
-          {/* Logo */}
+          {/* Animated Logo - Toggle between 3D and GIF */}
           <a href="/" className="flex items-center">
-            <HeaderLogo />
+            {/* 
+              GIF Logo लगाने के लिए:
+              1. /app/frontend/public/ में अपनी GIF रखें
+              2. नीचे AnimatedLogo3D की जगह AnimatedLogoGIF लिखें
+              3. gifPath में अपनी GIF का नाम डालें
+              
+              उदाहरण: <AnimatedLogoGIF className="mr-2" gifPath="/my-logo.gif" />
+            */}
+            <AnimatedLogo3D className="mr-2" />
+            <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+              Mithaas Delights
+            </span>
           </a>
 
           {/* Desktop Navigation - Force hide on mobile */}
@@ -694,92 +714,12 @@ const ProductCard = ({ product }) => {
   );
 };
 
-// Hero Section Component
+// Hero Section Component - Using AnimatedHeroSection with 3D background and advanced animations
 const HeroSection = () => {
   return (
-    <section className="relative min-h-[70vh] md:min-h-screen flex items-center justify-center bg-gradient-to-br from-orange-50 via-amber-50 to-orange-100 overflow-hidden" id="home">
-      {/* Background Pattern */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(251,146,60,0.1)_0%,transparent_50%)]"></div>
-      
-      <div className="container mx-auto px-4 py-12 md:py-20 relative z-10">
-        <div className="grid lg:grid-cols-2 gap-8 md:gap-12 items-center">
-          <div className="space-y-6 md:space-y-8 text-center lg:text-left">
-            <div className="space-y-3 md:space-y-4">
-              <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs md:text-sm" data-testid="hero-badge">
-                🎉 Festival Special Offers Available
-              </Badge>
-              <h1 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold leading-tight">
-                <span className="bg-gradient-to-r from-orange-600 via-amber-600 to-orange-500 bg-clip-text text-transparent">
-                  Premium
-                </span>
-                <br />
-                <span className="text-gray-800">Indian Sweets</span>
-                <br />
-                <span className="bg-gradient-to-r from-amber-600 to-orange-600 bg-clip-text text-transparent">
-                  & Delights
-                </span>
-              </h1>
-              <p className="text-base sm:text-lg md:text-xl text-gray-600 max-w-lg mx-auto lg:mx-0">
-                Experience the authentic taste of traditional Indian mithai and namkeen, 
-                crafted with love and the finest ingredients.
-              </p>
-            </div>
-            
-            <div className="flex flex-col sm:flex-row gap-3 md:gap-4 justify-center lg:justify-start">
-              <Button 
-                size="lg" 
-                className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white px-6 md:px-8 py-3 md:py-4 text-base md:text-lg w-full sm:w-auto"
-                data-testid="shop-now-button"
-                onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                Shop Now
-                <ChevronRight className="ml-2 w-4 h-4 md:w-5 md:h-5" />
-              </Button>
-              <Button 
-                variant="outline" 
-                size="lg" 
-                className="border-orange-300 text-orange-700 hover:bg-orange-50 px-6 md:px-8 py-3 md:py-4 text-base md:text-lg w-full sm:w-auto"
-                data-testid="explore-button"
-                onClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
-              >
-                Explore Catalog
-              </Button>
-            </div>
-
-            {/* Stats */}
-            <div className="grid grid-cols-3 gap-3 md:gap-6 pt-6 md:pt-8 border-t border-orange-200">
-              <div className="text-center">
-                <div className="text-xl md:text-2xl font-bold text-orange-600" data-testid="happy-customers-count">5K+</div>
-                <div className="text-xs md:text-sm text-gray-600">Happy Customers</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl md:text-2xl font-bold text-orange-600" data-testid="products-count">50+</div>
-                <div className="text-xs md:text-sm text-gray-600">Premium Products</div>
-              </div>
-              <div className="text-center">
-                <div className="text-xl md:text-2xl font-bold text-orange-600" data-testid="cities-count">10+</div>
-                <div className="text-xs md:text-sm text-gray-600">Cities Served</div>
-              </div>
-            </div>
-          </div>
-
-          {/* Hero Image */}
-          <div className="relative mt-8 lg:mt-0 order-first lg:order-last">
-            <div className="relative rounded-2xl overflow-hidden shadow-2xl">
-              <img 
-                src="/mithaas_delights.png"
-                alt="Premium Indian Sweets"
-                className="w-full h-64 sm:h-80 md:h-96 lg:h-[500px] object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/20 to-transparent"></div>
-            </div>
-            {/* Floating Elements - Hidden on mobile for better performance */}
-            <div className="hidden md:block absolute -top-4 -right-4 w-20 h-20 bg-gradient-to-br from-amber-400 to-orange-500 rounded-full opacity-20 animate-pulse"></div>
-            <div className="hidden md:block absolute -bottom-6 -left-6 w-16 h-16 bg-gradient-to-br from-orange-400 to-red-500 rounded-full opacity-30 animate-pulse delay-1000"></div>
-          </div>
-        </div>
-      </div>
-    </section>
+    <AnimatedHeroSection 
+      onCTAClick={() => document.getElementById('products')?.scrollIntoView({ behavior: 'smooth' })}
+    />
   );
 };
 
@@ -789,6 +729,7 @@ const ProductsSection = () => {
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([{ value: 'all', label: 'All Products' }]);
+  const { addToCart } = useCart();
 
   useEffect(() => {
     fetchCategories();
@@ -797,6 +738,10 @@ const ProductsSection = () => {
   useEffect(() => {
     fetchProducts();
   }, [selectedCategory]);
+
+  const handleViewDetails = (product) => {
+    window.location.href = `/product/${product.id}`;
+  };
 
   const fetchCategories = async () => {
     try {
@@ -886,8 +831,14 @@ const ProductsSection = () => {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 md:gap-6" data-testid="products-grid">
-            {products.map((product) => (
-              <ProductCard key={product.id} product={product} />
+            {products.map((product, index) => (
+              <AnimatedProductCard 
+                key={product.id} 
+                product={product} 
+                delay={index * 0.1}
+                onAddToCart={addToCart}
+                onClick={handleViewDetails}
+              />
             ))}
           </div>
         )}
@@ -902,13 +853,28 @@ const ProductsSection = () => {
   );
 };
 
-// About Section
+// About Section with Animations
 const AboutSection = () => {
+  const sectionRef = useScrollAnimation({ delay: 0.2 });
+  const statsRef = useStaggerAnimation({ stagger: 0.15 });
+
   return (
     <section className="py-20 bg-gradient-to-br from-orange-50 to-amber-50" id="about">
       <div className="container mx-auto px-4">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          <div>
+        <motion.div 
+          ref={sectionRef}
+          className="grid lg:grid-cols-2 gap-12 items-center"
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.8 }}
+        >
+          <motion.div
+            initial={{ opacity: 0, x: -50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, delay: 0.2 }}
+          >
             <Badge className="bg-orange-100 text-orange-700 mb-4">About Us</Badge>
             <h2 className="text-4xl font-bold text-gray-800 mb-6">
               Crafting Sweet Memories Since
@@ -927,45 +893,67 @@ const AboutSection = () => {
               we're creating moments of joy and celebration.
             </p>
             
-            <div className="grid grid-cols-2 gap-6">
-              <div className="text-center p-4 bg-white rounded-lg border border-orange-100">
+            <div ref={statsRef} className="grid grid-cols-2 gap-6">
+              <motion.div 
+                className="text-center p-4 bg-white rounded-lg border border-orange-100"
+                whileHover={{ scale: 1.05, boxShadow: "0 10px 30px rgba(249,115,22,0.2)" }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
                 <div className="text-2xl font-bold text-orange-600 mb-2">100%</div>
                 <div className="text-sm text-gray-600">Pure Ingredients</div>
-              </div>
-              <div className="text-center p-4 bg-white rounded-lg border border-orange-100">
+              </motion.div>
+              <motion.div 
+                className="text-center p-4 bg-white rounded-lg border border-orange-100"
+                whileHover={{ scale: 1.05, boxShadow: "0 10px 30px rgba(249,115,22,0.2)" }}
+                transition={{ type: "spring", stiffness: 300 }}
+              >
                 <div className="text-2xl font-bold text-orange-600 mb-2">0</div>
                 <div className="text-sm text-gray-600">Artificial Colors</div>
-              </div>
+              </motion.div>
             </div>
-          </div>
+          </motion.div>
           
-          <div className="grid grid-cols-2 gap-4">
+          <motion.div 
+            className="grid grid-cols-2 gap-4"
+            initial={{ opacity: 0, x: 50 }}
+            whileInView={{ opacity: 1, x: 0 }}
+            viewport={{ once: true }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+          >
             <div className="space-y-4">
-              <img 
+              <motion.img 
                 src="/Traditional_mithaai.png"
                 alt="Traditional sweet making"
                 className="rounded-lg shadow-md"
+                whileHover={{ scale: 1.05, rotate: 2 }}
+                transition={{ type: "spring", stiffness: 300 }}
               />
-              <img 
+              <motion.img 
                 src="/Premium_sweets.png"
                 alt="Premium ingredients"
                 className="rounded-lg shadow-md"
+                whileHover={{ scale: 1.05, rotate: -2 }}
+                transition={{ type: "spring", stiffness: 300 }}
               />
             </div>
             <div className="space-y-4 mt-8">
-              <img 
+              <motion.img 
                 src="hand_sweets.png"
                 alt="Handcrafted sweets"
                 className="rounded-lg shadow-md"
+                whileHover={{ scale: 1.05, rotate: -2 }}
+                transition={{ type: "spring", stiffness:300 }}
               />
-              <img 
+              <motion.img 
                 src="food_safty.png"
                 alt="Quality testing"
                 className="rounded-lg shadow-md"
+                whileHover={{ scale: 1.05, rotate: 2 }}
+                transition={{ type: "spring", stiffness: 300 }}
               />
             </div>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       </div>
     </section>
   );
@@ -1644,20 +1632,22 @@ const Home = () => {
   }, []);
 
   return (
-    <div className="min-h-screen bg-white">
-      <Header />
-      <MarqueeAnnouncements />
-      <HeroSection />
-      <div className="container mx-auto px-4 py-8">
-        <BannerCarousel />
+    <SmoothScroll>
+      <div className="min-h-screen bg-white">
+        <Header />
+        <MarqueeAnnouncements />
+        <HeroSection />
+        <div className="container mx-auto px-4 py-8">
+          <BannerCarousel />
+        </div>
+        <ProductsSection />
+        <AdvertisementSection />
+        <AboutSection />
+        <ContactSection />
+        <Footer />
+        <UnifiedChatBot />
       </div>
-      <ProductsSection />
-      <AdvertisementSection />
-      <AboutSection />
-      <ContactSection />
-      <Footer />
-      <UnifiedChatBot />
-    </div>
+    </SmoothScroll>
   );
 };
 
