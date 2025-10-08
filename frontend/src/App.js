@@ -224,7 +224,7 @@ const Header = () => {
               
               उदाहरण: <AnimatedLogoGIF className="mr-2" gifPath="/my-logo.gif" />
             */}
-            <AnimatedLogo3D className="mr-2" />
+            <AnimatedLogoGIF className="mr-2" gifPath="/animated-logo.mp4" />
             <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
               Mithaas Delights
             </span>
@@ -1117,7 +1117,7 @@ const Footer = () => {
                 alt="Mithaas Delights Logo" 
                 className="w-16 h-16 object-contain mb-2"
               />
-              <span className="text-xl font-bold block">Mithaas Delights</span>
+              <span className=" text-white mb-4 text-xl font-bold block">Mithaas Delights</span>
             </div>
             <p className="text-white mb-4">
               Premium Indian sweets and snacks crafted with love and tradition.
@@ -1125,32 +1125,32 @@ const Footer = () => {
           </div>
           
           <div>
-            <h4 className="font-semibold mb-4">Quick Links</h4>
+            <h4 className="font-semibold mb-4 text-white">Quick Links</h4>
             <ul className="space-y-2 text-white">
-              <li><a href="#home" className="hover:text-orange-400 transition-colors">Home</a></li>
-              <li><a href="#products" className="hover:text-orange-400 transition-colors">Products</a></li>
-              <li><a href="#about" className="hover:text-orange-400 transition-colors">About</a></li>
-              <li><a href="#contact" className="hover:text-orange-400 transition-colors">Contact</a></li>
+              <li><a href="#home" className=" text-white hover:text-orange-400 transition-colors">Home</a></li>
+              <li><a href="#products" className=" text-white hover:text-orange-400 transition-colors">Products</a></li>
+              <li><a href="#about" className=" text-white hover:text-orange-400 transition-colors">About</a></li>
+              <li><a href="#contact" className=" text-white hover:text-orange-400 transition-colors">Contact</a></li>
             </ul>
           </div>
           
           <div>
-            <h4 className="font-semibold mb-4">Legal</h4>
+            <h4 className="font-semibold mb-4 underline-offset-0 text-white">Legal</h4>
             <ul className="space-y-2 text-white">
-              <li><a href="/terms" className="hover:text-orange-400 transition-colors">Terms & Conditions</a></li>
-              <li><a href="/privacy" className="hover:text-orange-400 transition-colors">Privacy Policy</a></li>
-              <li><a href="/track-order" className="hover:text-orange-400 transition-colors">Track Order</a></li>
-              <li><a href="#contact" className="hover:text-orange-400 transition-colors">Contact Us</a></li>
+              <li><a href="/terms" className=" text-white hover:text-orange-400 transition-colors">Terms & Conditions</a></li>
+              <li><a href="/privacy" className=" text-white hover:text-orange-400 transition-colors">Privacy Policy</a></li>
+              <li><a href="/track-order" className=" text-white , hover:text-orange-400 transition-colors">Track Order</a></li>
+              <li><a href="#contact" className=" text-white , hover:text-orange-400 transition-colors">Contact Us</a></li>
             </ul>
           </div>
           
           <div>
-            <h4 className="font-semibold mb-4">Connect</h4>
+            <h4 className="font-semibold mb-4 text-white">Connect</h4>
             <ul className="space-y-2 text-white">
-              <li><a href="https://www.instagram.com/mithaasdelightsofficial?igsh=aW85Z2h6bTEwazJv" className="hover:text-orange-400 transition-colors">Instagram</a></li>
-              <li><a href="https://wa.me/918989549544" target="_blank" rel="noopener noreferrer" className="hover:text-orange-400 transition-colors">WhatsApp</a></li>
-              <li><a href="#" className="hover:text-orange-400 transition-colors">Facebook</a></li>
-              <li><a href="#" className="hover:text-orange-400 transition-colors">Twitter</a></li>
+              <li><a href="https://www.instagram.com/mithaasdelightsofficial?igsh=aW85Z2h6bTEwazJv" className=" text-white hover:text-orange-400 transition-colors">Instagram</a></li>
+              <li><a href="https://wa.me/918989549544" target="_blank" rel="noopener noreferrer" className=" text-white hover:text-orange-400 transition-colors">WhatsApp</a></li>
+              <li><a href="#" className=" text-white hover:text-orange-400 transition-colors">Facebook</a></li>
+              <li><a href="#" className=" text-white hover:text-orange-400 transition-colors">Twitter</a></li>
             </ul>
           </div>
         </div>
@@ -1159,21 +1159,21 @@ const Footer = () => {
         <div className="border-t border-white/20 pt-6 mb-6">
           <div className="flex flex-col sm:flex-row items-center justify-center gap-6">
             <img 
-              src="/certificates/fssai-certificate.jpg" 
+              src="/fssai-certificate.jpg" 
               alt="FSSAI Certificate - License 21425850011554" 
               className="h-32 md:h-40 w-auto object-contain rounded-lg shadow-lg hover:scale-105 transition-transform cursor-pointer"
             />
             <img 
-              src="/certificates/msme-certificate.jpg" 
+              src="/msme-certificate.jpg" 
               alt="MSME Certificate - UDYAM-MP-23-0235652" 
               className="h-32 md:h-40 w-auto object-contain rounded-lg shadow-lg hover:scale-105 transition-transform cursor-pointer"
             />
           </div>
         </div>
         
-        <div className="border-t border-white pt-8 text-center">
-          <p>&copy; 2025 Mithaas Delights. All rights reserved. Made with ❤️ in India 🇮🇳</p>
-          <p className="text-xs mt-2">Certified by Food Safety and Standards Authority of India</p>
+        <div className="border-t border-white pt-8 text-center text-white">
+          <p className="text-white">&copy; 2025 Mithaas Delights. All rights reserved. Made with ❤️ in India 🇮🇳</p>
+          <p className="text-xs mt-2 text-white">Certified by Food Safety and Standards Authority of India</p>
         </div>
       </div>
     </footer>

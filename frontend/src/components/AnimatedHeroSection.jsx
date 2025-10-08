@@ -20,8 +20,8 @@ gsap.registerPlugin(ScrollTrigger);
  */
 export const AnimatedHeroSection = ({ 
   onCTAClick,
-  use3DBackground = true,  // false करें GIF के लिए
-  heroGifPath = '/hero-animation.gif',
+  use3DBackground = false,  // Changed to use GIF instead of 3D
+  heroGifPath = '/hero-animation.mp4',  // Use the existing video file
   gifOpacity = 0.4,
   gifBlend = 'normal'
 }) => {
@@ -196,7 +196,7 @@ export const AnimatedHeroSection = ({
             {/* Subtitle */}
             <p
               ref={subtitleRef}
-              className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 max-w-xl"
+              className="text-xl md:text-2xl text-black dark:text-gray-300 max-w-xl"
             >
               Experience the authentic taste of traditional Indian sweets, crafted with love and
               premium ingredients.
@@ -210,7 +210,7 @@ export const AnimatedHeroSection = ({
                 ripple={true}
                 glow={true}
                 onClick={onCTAClick}
-                className="text-lg px-8 py-6"
+                className="text-stone-950 text-lg px-8 py-6"
               >
                 Explore Sweets
                 <ChevronRight className="ml-2 w-5 h-5" />
