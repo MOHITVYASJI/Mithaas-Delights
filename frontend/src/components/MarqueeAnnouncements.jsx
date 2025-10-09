@@ -104,7 +104,7 @@ export const MarqueeAnnouncements = () => {
                     data-testid={`marquee-announcement-${announcement.id}`}
                   >
                     <Megaphone className="w-4 h-4 inline mr-2" />
-                    {announcement.content}
+                    {announcement.message || announcement.content}
                     {announcement.action_text && announcement.action_url && (
                       <span className="ml-2 underline font-medium">
                         {announcement.action_text}
@@ -146,7 +146,7 @@ export const MarqueeAnnouncements = () => {
               </div>
               <div className="flex-1">
                 <h3 className="font-bold text-lg mb-1">{announcement.title}</h3>
-                <p className="text-sm opacity-90">{announcement.content}</p>
+                <p className="text-sm opacity-90">{announcement.message || announcement.content}</p>
                 {announcement.action_text && announcement.action_url && (
                   <Button
                     size="sm"
@@ -200,7 +200,7 @@ export const MarqueeAnnouncements = () => {
               </div>
             </div>
             <div className="p-6">
-              <p className="text-gray-700 mb-4">{announcement.content}</p>
+              <p className="text-gray-700 mb-4">{announcement.message || announcement.content}</p>
               {announcement.action_text && announcement.action_url && (
                 <Button
                   className="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white"

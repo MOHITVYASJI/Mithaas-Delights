@@ -51,7 +51,7 @@ export const UnifiedChatBot = () => {
   // Voice State
   const [isListening, setIsListening] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
-  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [voiceEnabled, setVoiceEnabled] = useState(false); // Changed to false - no autoplay
   
   // UI State
   const [isDarkMode, setIsDarkMode] = useState(false);
@@ -285,10 +285,7 @@ export const UnifiedChatBot = () => {
 
       setMessages(prev => [...prev, botMessage]);
 
-      // Auto-speak the response if voice is enabled
-      if (voiceEnabled) {
-        speakMessage(botMessage.content);
-      }
+      // Removed auto-speak - user can manually click speaker icon to hear response
 
     } catch (error) {
       console.error('Chat error:', error);
@@ -369,8 +366,8 @@ export const UnifiedChatBot = () => {
     const isWelcome = message.isWelcome;
     
     return (
-      <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
-        <div className={`flex items-start space-x-2 max-w-xs lg:max-w-md ${
+      <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4 w-full`}>
+        <div className={`flex items-start space-x-2 max-w-[85%] ${
           isUser ? 'flex-row-reverse space-x-reverse' : ''
         }`}>
           <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
@@ -396,7 +393,7 @@ export const UnifiedChatBot = () => {
                   ? 'bg-gray-700 text-gray-100'
                   : 'bg-gray-100 text-gray-800'
           }`}>
-            <p className="text-sm whitespace-pre-wrap">{message.content}</p>
+            <p className="text-sm whitespace-pre-wrap break-words overflow-wrap-anywhere">{message.content}</p>
             
             {message.orderContext && (
               <div className="mt-2 pt-2 border-t border-gray-200">
@@ -452,7 +449,7 @@ export const UnifiedChatBot = () => {
     <div className="fixed bottom-6 right-6 z-50">
       <Card className={`transition-all duration-300 shadow-2xl ${
         isDarkMode ? 'bg-gray-800 border-gray-700' : 'bg-white'
-      } ${isMinimized ? 'w-80 h-16' : 'w-96 h-[600px]'} flex flex-col`} data-testid="chatbot-window">
+      } ${isMinimized ? 'w-80 h-16' : 'w-96 h-[600px]'} flex flex-col overflow-hidden`} data-testid="chatbot-window">
         
         {/* Header */}
         <CardHeader className={`pb-3 ${
@@ -550,9 +547,9 @@ export const UnifiedChatBot = () => {
         {!isMinimized && (
           <>
             {/* Messages Area */}
-            <CardContent className="p-0 flex-1 flex flex-col">
-              <ScrollArea className="flex-1 p-4">
-                <div className="space-y-1">
+            <CardContent className="p-0 flex-1 flex flex-col overflow-hidden">
+              <ScrollArea className="flex-1 p-4 overflow-y-auto">
+                <div className="space-y-1 break-words">
                   {messages.map((message) => (
                     <MessageBubble key={message.id} message={message} />
                   ))}
