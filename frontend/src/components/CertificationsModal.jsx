@@ -9,7 +9,7 @@ export const CertificationsModal = ({ isOpen, onClose, certType }) => {
       subtitle: 'Ministry of MSME, Government of India',
       number: 'UDYAM-MP-23-0235652',
       description: 'Mithaas Delights is officially registered under the Micro, Small & Medium Enterprises Development Act, 2006. This certification validates our business as a recognized enterprise by the Government of India.',
-      image: '/certificates/msme-certificate.jpg',
+      image: '/msme-certificate.jpg',
       icon: Award,
       color: 'green',
       benefits: [
@@ -24,7 +24,7 @@ export const CertificationsModal = ({ isOpen, onClose, certType }) => {
       subtitle: 'Food Safety and Standards Authority of India',
       number: '21425850011554',
       description: 'Our FSSAI license certifies that Mithaas Delights complies with all food safety standards set by the Government of India. Every product is manufactured under strict hygiene and quality control measures.',
-      image: '/certificates/fssai-certificate.jpg',
+      image: '/fssai-certificate.jpg',
       icon: Shield,
       color: 'blue',
       benefits: [

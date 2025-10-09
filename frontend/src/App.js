@@ -464,7 +464,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
   return children;
 };
 
-// Enhanced Product Card Component with Offers Support
+// Enhanced Product Card Component with Offers Support and Sold Out functionality
 const ProductCard = ({ product }) => {
   const { addToCart } = useCart();
   const { user, isAuthenticated } = useAuth();
@@ -577,8 +577,13 @@ const ProductCard = ({ product }) => {
     }
   };
 
+  // Check if product is sold out or not available
+  const isSoldOut = product.is_sold_out || !product.is_available || 
+    (product.variants && product.variants.every(v => !v.is_available || v.stock === 0));
   return (
-    <Card className="group overflow-hidden hover:shadow-xl transition-all duration-300 bg-white border border-amber-100 hover:border-orange-200 relative" data-testid="product-card">
+    <Card className={`group overflow-hidden transition-all duration-300 bg-white border border-amber-100 relative card-float ${
+      isSoldOut ? 'opacity-90' : 'hover:border-orange-200'
+    }`} data-testid="product-card">
       <div 
         className="relative overflow-hidden cursor-pointer"
         onClick={handleViewDetails}
@@ -586,14 +591,16 @@ const ProductCard = ({ product }) => {
         <img 
           src={product.image_url} 
           alt={product.name}
-          className="w-full h-40 sm:h-44 md:h-48 object-cover transition-transform duration-300 group-hover:scale-105"
+          className={`w-full h-40 sm:h-44 md:h-48 object-cover transition-transform duration-300 ${
+            isSoldOut ? 'filter grayscale' : 'group-hover:scale-105'
+          }`}
         />
         
         {/* Offer Badges */}
-        {activeOffers.length > 0 && (
+        {activeOffers.length > 0 && !isSoldOut && (
           <div className="absolute top-2 left-2 z-10">
             <Badge 
-              className="mb-1 shadow-lg font-bold text-xs px-2 py-1"
+              className="mb-1 shadow-lg font-bold text-xs px-2 py-1 offer-badge animate-pulse"
               style={{ 
                 backgroundColor: activeOffers[0].badge_color || '#f97316',
                 color: '#ffffff'
@@ -602,35 +609,45 @@ const ProductCard = ({ product }) => {
               {getBadgeText(activeOffers[0])}
             </Badge>
             {activeOffers.length > 1 && (
-              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-0.5 shadow-lg">
+              <Badge className="bg-gradient-to-r from-purple-500 to-pink-500 text-white text-xs px-2 py-0.5 shadow-lg animate-bounce">
                 +{activeOffers.length - 1} more
               </Badge>
             )}
           </div>
         )}
 
-        {/* Other badges */}
+        {/* Discount Badges */}
         <div className="absolute top-2 right-2 space-y-1">
-            <Badge className="bg-red-500 text-white shadow-lg">
+          {product.discount_percentage && !isSoldOut && (
+            <Badge className="bg-red-500 text-white shadow-lg font-bold animate-pulse">
               {product.discount_percentage}% OFF
             </Badge>
           )}
-          {product.is_featured && (
+          {product.is_featured && !isSoldOut && (
             <Badge className="bg-gradient-to-r from-amber-500 to-yellow-500 text-white shadow-lg">
-              Featured
+              ⭐ Featured
             </Badge>
           )}
         </div>
-        {product.is_sold_out && (
-          <div className="absolute inset-0 bg-black/60 flex items-center justify-center backdrop-blur-sm">
-            <Badge className="bg-red-600 text-white text-lg px-4 py-2 shadow-lg">SOLD OUT</Badge>
+        {/* Sold Out Overlay */}
+        {isSoldOut && (
+          <div className="absolute inset-0 bg-black/70 flex items-center justify-center backdrop-blur-sm z-20">
+            <div className="text-center">
+              <Badge className="bg-red-600 text-white text-lg px-6 py-3 shadow-xl animate-pulse font-bold">
+                SOLD OUT
+              </Badge>
+              <p className="text-white text-sm mt-2 font-medium">Out of Stock</p>
+            </div>
           </div>
         )}
+        {/* Wishlist Button */}
         <Button
           variant="ghost"
           size="sm"
           disabled={loading}
-          className="absolute bottom-2 right-2 bg-white/90 hover:bg-white rounded-full w-8 h-8 p-0 shadow-lg transition-all duration-200 hover:scale-105"
+          className={`absolute bottom-2 right-2 bg-white/90 hover:bg-white rounded-full w-8 h-8 p-0 shadow-lg transition-all duration-200 hover:scale-105 ${
+            isSoldOut ? 'opacity-50' : ''
+          }`}
           onClick={(e) => {
             e.stopPropagation();
             toggleWishlist();
@@ -639,23 +656,29 @@ const ProductCard = ({ product }) => {
         >
           <Heart className={`w-4 h-4 transition-all duration-200 ${
             loading ? 'animate-pulse text-gray-400' : 
-            isInWishlist ? 'fill-red-500 text-red-500' : 'text-gray-600 hover:text-red-500'
+            isInWishlist ? 'fill-red-500 text-red-500 animate-pulse' : 'text-gray-600 hover:text-red-500'
           }`} />
         </Button>
       </div>
       <CardContent className="p-3 sm:p-4">
         <h3 
-          className="font-semibold text-base sm:text-lg text-gray-800 mb-2 cursor-pointer hover:text-orange-600 transition-colors line-clamp-1" 
+          className={`font-semibold text-base sm:text-lg mb-2 cursor-pointer transition-colors line-clamp-1 ${
+            isSoldOut ? 'text-gray-500' : 'text-gray-800 hover:text-orange-600'
+          }`} 
           data-testid="product-name"
           onClick={handleViewDetails}
         >
           {product.name}
         </h3>
-        <p className="text-gray-600 text-xs sm:text-sm mb-3 line-clamp-2 leading-relaxed">{product.description}</p>
+        <p className={`text-xs sm:text-sm mb-3 line-clamp-2 leading-relaxed ${
+          isSoldOut ? 'text-gray-400' : 'text-gray-600'
+        }`}>
+          {product.description}
+        </p>
         
         <div className="flex items-center justify-between mb-3">
           <div className="flex flex-col sm:flex-row sm:items-center sm:space-x-2">
-            {bestOffer ? (
+            {bestOffer && !isSoldOut ? (
               <>
                 <span className="text-lg sm:text-xl font-bold text-orange-600" data-testid="product-price">
                   ₹{finalPrice.toFixed(0)}
@@ -665,7 +688,9 @@ const ProductCard = ({ product }) => {
                 </span>
               </>
             ) : (
-              <span className="text-lg sm:text-xl font-bold text-orange-600" data-testid="product-price">
+              <span className={`text-lg sm:text-xl font-bold ${
+                isSoldOut ? 'text-gray-400' : 'text-orange-600'
+              }`} data-testid="product-price">
                 From ₹{getMinPrice()}
               </span>
             )}
@@ -684,29 +709,37 @@ const ProductCard = ({ product }) => {
                   key={i} 
                   className={`w-3 h-3 ${
                     i < Math.floor(product.rating || 4.5) 
-                      ? 'fill-amber-400 text-amber-400' 
+                      ? (isSoldOut ? 'fill-gray-300 text-gray-300' : 'fill-amber-400 text-amber-400') 
                       : 'text-gray-300'
                   }`} 
                 />
               ))}
             </div>
-            <span className="text-xs text-gray-600 ml-1">
+            <span className={`text-xs ml-1 ${
+              isSoldOut ? 'text-gray-400' : 'text-gray-600'
+            }`}>
               ({product.review_count || 0})
             </span>
           </div>
+          
           <Button 
             size="sm" 
             onClick={handleViewDetails}
-            className="bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white text-xs sm:text-sm px-2 sm:px-3 py-1 transition-all duration-200 hover:scale-105 shadow-lg"
+            disabled={isSoldOut}
+            className={`text-xs sm:text-sm px-2 sm:px-3 py-1 transition-all duration-200 shadow-lg ${
+              isSoldOut 
+                ? 'bg-gray-400 hover:bg-gray-400 text-white cursor-not-allowed opacity-50' 
+                : 'bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white hover:scale-105 btn-premium'
+            }`}
             data-testid="view-details-button"
           >
-            View Details
+            {isSoldOut ? 'Out of Stock' : 'View Details'}
           </Button>
         </div>
         
-        {bestOffer && (
-          <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full text-center font-medium">
-            Save ₹{bestOffer.discount.toFixed(0)} with this offer!
+        {bestOffer && !isSoldOut && (
+          <div className="mt-2 text-xs text-green-600 bg-green-50 px-2 py-1 rounded-full text-center font-medium animate-pulse">
+            💰 Save ₹{bestOffer.discount.toFixed(0)} with this offer!
           </div>
         )}
       </CardContent>
