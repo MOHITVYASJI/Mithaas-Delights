@@ -573,3 +573,70 @@ html {
     display: none !important;
   }
 }
+
+/* Advanced Header Glow Effects */
+.nav-button-glow {
+  position: relative;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.nav-button-glow:hover {
+  filter: brightness(1.1);
+}
+
+/* Light Theme Glow */
+.nav-button-glow:hover:not(.dark *) {
+  box-shadow: 0 0 20px rgba(249, 115, 22, 0.6), 
+              0 0 40px rgba(249, 115, 22, 0.4),
+              0 0 60px rgba(249, 115, 22, 0.2);
+  background: rgba(255, 255, 255, 0.9) !important;
+  border-color: rgba(249, 115, 22, 0.3);
+}
+
+/* Dark Theme Glow */
+.dark .nav-button-glow:hover {
+  box-shadow: 0 0 20px rgba(56, 189, 248, 0.6), 
+              0 0 40px rgba(56, 189, 248, 0.4),
+              0 0 60px rgba(56, 189, 248, 0.2);
+  background: rgba(17, 24, 39, 0.9) !important;
+  border-color: rgba(56, 189, 248, 0.3);
+}
+
+/* Advanced glassmorphism for header */
+.glass-header {
+  background: rgba(255, 255, 255, 0.4);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.dark .glass-header {
+  background: rgba(17, 24, 39, 0.4);
+  border: 1px solid rgba(107, 114, 128, 0.2);
+}
+
+/* Button glow animation */
+@keyframes glow-pulse {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(249, 115, 22, 0.6), 0 0 40px rgba(249, 115, 22, 0.3);
+  }
+}
+
+.dark @keyframes glow-pulse-dark {
+  0%, 100% {
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 30px rgba(56, 189, 248, 0.6), 0 0 40px rgba(56, 189, 248, 0.3);
+  }
+}
+
+/* Smooth header transitions */
+.header-smooth {
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}

@@ -38,6 +38,7 @@ import { AnimatedButton } from "./components/AnimatedButton";
 import { AnimatedLogo3D } from "./components/AnimatedLogo3D";
 import { AnimatedLogoGIF } from "./components/AnimatedLogoGIF";
 import { HeroGIFBackground } from "./components/HeroGIFBackground";
+import { AdvancedHeader } from "./components/AdvancedHeader";
 import { motion } from "framer-motion";
 import { useScrollAnimation, useStaggerAnimation } from "./hooks/useScrollAnimation";
 import "./App.css";
@@ -1334,7 +1335,7 @@ const ProfilePage = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
-      <Header />
+      <AdvancedHeader />
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-6xl mx-auto">
           <div className="mb-8">
@@ -1667,7 +1668,7 @@ const Home = () => {
   return (
     <SmoothScroll>
       <div className="min-h-screen bg-white">
-        <Header />
+        <AdvancedHeader />
         <MarqueeAnnouncements />
         <HeroSection />
         <div className="container mx-auto px-4 py-8">
@@ -1710,7 +1711,7 @@ const OrderTracking = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-orange-50 to-amber-50">
-      <Header />
+      <AdvancedHeader />
       <div className="container mx-auto px-4 py-12">
         <div className="max-w-2xl mx-auto">
           <div className="text-center mb-8">
