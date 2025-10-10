@@ -15,8 +15,12 @@ export const AnimatedLogoGIF = ({ className = '', gifPath = '/mithaas-logo.png' 
       className={`relative ${className}`}
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
-      whileHover={{ scale: 1.1, rotate: [0, -5, 5, 0] }}
-      transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+      animate={isHovered ? { rotate: [-5, 5, -5, 5, 0] } : { rotate: 0 }}
+      whileHover={{ scale: 1.1 }}
+      transition={{ 
+        scale: { type: 'spring', stiffness: 300, damping: 20 },
+        rotate: { duration: 0.5, ease: 'easeInOut' }
+      }}
     >
       {/* Main Logo - GIF or Video */}
       {isVideo ? (

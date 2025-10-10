@@ -212,8 +212,12 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-transparent backdrop-blur-[40px] border-b border-white/20 sticky top-0 z-50 shadow-lg shadow-black/5">
-      <div className="max-w-7xl mx-auto px-5 py-2" style={{marginLeft: '20px', marginRight: '20px'}}>
+    <header className="fixed top-0 left-0 right-0 z-50" style={{marginLeft: '20px', marginRight: '20px'}}>
+      <div className="mx-auto px-5 py-2 rounded-b-2xl border border-white/20 shadow-lg" style={{
+        background: 'rgba(255, 255, 255, 0)',
+        backdropFilter: 'blur(40px)',
+        WebkitBackdropFilter: 'blur(40px)',
+      }}>
         <div className="flex items-center justify-between">
           {/* Animated Logo - Toggle between 3D and GIF */}
           <a href="/" className="flex items-center">
@@ -233,12 +237,12 @@ const Header = () => {
 
           {/* Desktop Navigation - Force hide on mobile */}
           <nav className="desktop-nav" style={{display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: '1.5rem'}}>
-            <a href="/" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Home</a>
-            <a href="/#products" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Products</a>
-            <a href="/bulk-orders" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Bulk Orders</a>
-            <a href="/gallery" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Gallery</a>
-            <a href="/#about" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">About</a>
-            <a href="/#contact" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Contact</a>
+            <a href="/" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Home</a>
+            <a href="/#products" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Products</a>
+            <a href="/bulk-orders" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Bulk Orders</a>
+            <a href="/gallery" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Gallery</a>
+            <a href="/#about" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>About</a>
+            <a href="/#contact" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Contact</a>
           </nav>
 
           {/* Action Buttons */}
@@ -403,14 +407,14 @@ const Header = () => {
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <nav className="mt-4 pb-4 border-t border-white/20 pt-4 bg-black/20 backdrop-blur-[60%] rounded-lg">
+          <nav className="mt-4 pb-4 border-t border-white/20 pt-4 bg-black/20 rounded-lg" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)'}}>
             <div className="flex flex-col space-y-3 px-4">
-              <a href="#home" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Home</a>
-              <a href="#products" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Products</a>
-              <a href="/bulk-orders" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Bulk Orders</a>
-              <a href="/gallery" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Gallery</a>
-              <a href="#about" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">About</a>
-              <a href="#contact" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Contact</a>
+              <a href="#home" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Home</a>
+              <a href="#products" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Products</a>
+              <a href="/bulk-orders" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Bulk Orders</a>
+              <a href="/gallery" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Gallery</a>
+              <a href="#about" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>About</a>
+              <a href="#contact" className="text-white/90 hover:text-orange-300 transition-colors px-4 py-2 rounded-full" style={{backdropFilter: 'blur(60%)', WebkitBackdropFilter: 'blur(60%)', background: 'rgba(255, 255, 255, 0.1)'}}>Contact</a>
               {!isAuthenticated && (
                 <div className="flex flex-col space-y-2 pt-2 border-t border-white/20">
                   <Button 

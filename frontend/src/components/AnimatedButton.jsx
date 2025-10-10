@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { Button } from './ui/button';
@@ -169,16 +169,20 @@ export const AnimatedIconButton = ({
   bounce = true,
   ...props
 }) => {
+  const [isHovered, setIsHovered] = useState(false);
+  
   return (
     <motion.button
       className={`relative p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors ${className}`}
-      whileHover={bounce ? { scale: 1.1, rotate: [0, -10, 10, 0] } : { scale: 1.1 }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      animate={bounce && isHovered ? { rotate: [-10, 10, -10, 10, 0] } : { rotate: 0 }}
+      whileHover={{ scale: 1.1 }}
       whileTap={{ scale: 0.9 }}
       onClick={onClick}
       transition={{
-        type: 'spring',
-        stiffness: 300,
-        damping: 20,
+        scale: { type: 'spring', stiffness: 300, damping: 20 },
+        rotate: { duration: 0.4, ease: 'easeInOut' }
       }}
       {...props}
     >

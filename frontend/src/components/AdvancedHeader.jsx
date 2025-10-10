@@ -120,9 +120,12 @@ export const AdvancedHeader = () => {
   return (
     <>
       <motion.header 
-        className="fixed top-2 left-[5px] right-[5px] z-50 mx-auto"
+        className="fixed z-50 mx-auto"
         style={{
-          maxWidth: 'calc(100% - 10px)',
+          top: 0,
+          left: '20px',
+          right: '20px',
+          maxWidth: 'calc(100% - 40px)',
         }}
         initial={{ y: 0, opacity: 1 }}
         animate={{ 
@@ -137,9 +140,9 @@ export const AdvancedHeader = () => {
         <div 
           className="border shadow-2xl rounded-b-3xl"
           style={{
-            backdropFilter: 'blur(20px) saturate(180%)',
-            WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-            backgroundColor: isDark ? 'rgba(17, 24, 39, 0.35)' : 'rgba(255, 255, 255, 0.35)',
+            backdropFilter: 'blur(40px) saturate(180%)',
+            WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+            backgroundColor: isDark ? 'rgba(17, 24, 39, 0)' : 'rgba(255, 255, 255, 0)',
             borderColor: isDark ? 'rgba(107, 114, 128, 0.25)' : 'rgba(255, 255, 255, 0.25)',
             borderWidth: '1px',
             borderStyle: 'solid',
@@ -195,9 +198,9 @@ export const AdvancedHeader = () => {
                         damping: 15 
                       }}
                       style={{
-                        backdropFilter: 'blur(16px) saturate(200%)',
-                        WebkitBackdropFilter: 'blur(16px) saturate(200%)',
-                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                        backdropFilter: 'blur(60%) saturate(200%)',
+                        WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                         borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
                         boxShadow: isDark 
                           ? '0 4px 12px rgba(56, 189, 248, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
@@ -240,9 +243,9 @@ export const AdvancedHeader = () => {
                         className="rounded-full p-2 border transition-all duration-300"
                         data-testid="search-button"
                         style={{
-                          backdropFilter: 'blur(16px) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(16px) saturate(200%)',
-                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                          backdropFilter: 'blur(60%) saturate(200%)',
+                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                           borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
                           boxShadow: isDark 
                             ? '0 4px 12px rgba(56, 189, 248, 0.15)'
@@ -342,9 +345,9 @@ export const AdvancedHeader = () => {
                           className="rounded-2xl px-3 py-2 border transition-all duration-300"
                           data-testid="user-menu-trigger"
                           style={{
-                            backdropFilter: 'blur(16px) saturate(200%)',
-                            WebkitBackdropFilter: 'blur(16px) saturate(200%)',
-                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                            backdropFilter: 'blur(60%) saturate(200%)',
+                            WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                             borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
                             boxShadow: isDark 
                               ? '0 4px 12px rgba(56, 189, 248, 0.15)'
@@ -402,9 +405,9 @@ export const AdvancedHeader = () => {
                         className="rounded-2xl text-sm px-4 py-2 border transition-all duration-300"
                         data-testid="login-button"
                         style={{
-                          backdropFilter: 'blur(16px) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(16px) saturate(200%)',
-                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                          backdropFilter: 'blur(60%) saturate(200%)',
+                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                           borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
                           boxShadow: isDark 
                             ? '0 4px 12px rgba(56, 189, 248, 0.15)'
@@ -436,8 +439,8 @@ export const AdvancedHeader = () => {
                         className="hidden sm:inline-flex rounded-2xl text-sm px-4 py-2 border font-semibold transition-all duration-300 premium-button"
                         data-testid="signup-button"
                         style={{
-                          backdropFilter: 'blur(16px) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(16px) saturate(200%)',
+                          backdropFilter: 'blur(60%) saturate(200%)',
+                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
                           background: isDark 
                             ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(14, 165, 233, 0.3) 100%)'
                             : 'linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.3) 100%)',
@@ -477,9 +480,9 @@ export const AdvancedHeader = () => {
                       className="relative rounded-full p-2 border transition-all duration-300" 
                       data-testid="cart-button"
                       style={{
-                        backdropFilter: 'blur(16px) saturate(200%)',
-                        WebkitBackdropFilter: 'blur(16px) saturate(200%)',
-                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                        backdropFilter: 'blur(60%) saturate(200%)',
+                        WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                         borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
                         boxShadow: isDark 
                           ? '0 4px 12px rgba(56, 189, 248, 0.15)'
@@ -521,9 +524,9 @@ export const AdvancedHeader = () => {
                     display: isMobile ? 'flex' : 'none', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    backdropFilter: 'blur(16px) saturate(200%)',
-                    WebkitBackdropFilter: 'blur(16px) saturate(200%)',
-                    backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                    backdropFilter: 'blur(60%) saturate(200%)',
+                    WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                    backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                     borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
                     boxShadow: isDark 
                       ? '0 4px 12px rgba(56, 189, 248, 0.15)'
@@ -565,9 +568,9 @@ export const AdvancedHeader = () => {
                         transition={{ delay: idx * 0.05 }}
                         whileTap={{ scale: 0.95 }}
                         style={{
-                          backdropFilter: 'blur(16px) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(16px) saturate(200%)',
-                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                          backdropFilter: 'blur(60%) saturate(200%)',
+                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
                           borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)'
                         }}
                       >
