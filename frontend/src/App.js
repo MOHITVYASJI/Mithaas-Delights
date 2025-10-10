@@ -212,8 +212,8 @@ const Header = () => {
   };
 
   return (
-    <header className="bg-white/95 backdrop-blur-md border-b border-amber-100 sticky top-0 z-50 shadow-sm">
-      <div className="container mx-auto px-4 py-3">
+    <header className="bg-transparent backdrop-blur-[40px] border-b border-white/20 sticky top-0 z-50 shadow-lg shadow-black/5">
+      <div className="max-w-7xl mx-auto px-5 py-2" style={{marginLeft: '20px', marginRight: '20px'}}>
         <div className="flex items-center justify-between">
           {/* Animated Logo - Toggle between 3D and GIF */}
           <a href="/" className="flex items-center">
@@ -226,29 +226,33 @@ const Header = () => {
               उदाहरण: <AnimatedLogoGIF className="mr-2" gifPath="/my-logo.gif" />
             */}
             <AnimatedLogoGIF className="mr-2" gifPath="/animated-logo.mp4" />
-            <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-orange-600 to-amber-600 bg-clip-text text-transparent">
+            <span className="text-xl md:text-2xl font-bold bg-gradient-to-r from-white to-orange-200 bg-clip-text text-transparent drop-shadow-lg">
               Mithaas Delights
             </span>
           </a>
 
           {/* Desktop Navigation - Force hide on mobile */}
           <nav className="desktop-nav" style={{display: isMobile ? 'none' : 'flex', alignItems: 'center', gap: '1.5rem'}}>
-            <a href="/" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
-            <a href="/#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
-            <a href="/bulk-orders" className="text-gray-700 hover:text-orange-600 transition-colors">Bulk Orders</a>
-            <a href="/gallery" className="text-gray-700 hover:text-orange-600 transition-colors">Gallery</a>
-            <a href="/#about" className="text-gray-700 hover:text-orange-600 transition-colors">About</a>
-            <a href="/#contact" className="text-gray-700 hover:text-orange-600 transition-colors">Contact</a>
+            <a href="/" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Home</a>
+            <a href="/#products" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Products</a>
+            <a href="/bulk-orders" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Bulk Orders</a>
+            <a href="/gallery" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Gallery</a>
+            <a href="/#about" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">About</a>
+            <a href="/#contact" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Contact</a>
           </nav>
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-3">
-            <ThemeSwitcher />
-            <NotificationSystem isAuthenticated={isAuthenticated} />
+            <div className="bg-white/90 backdrop-blur-sm rounded-full p-1">
+              <ThemeSwitcher />
+            </div>
+            <div className="bg-white/90 backdrop-blur-sm rounded-full p-1">
+              <NotificationSystem isAuthenticated={isAuthenticated} />
+            </div>
             <Dialog open={searchOpen} onOpenChange={setSearchOpen}>
               <DialogTrigger asChild>
-                <Button variant="ghost" size="sm" data-testid="search-button">
-                  <Search className="w-5 h-5" />
+                <Button variant="ghost" size="sm" data-testid="search-button" className="bg-white/90 backdrop-blur-sm rounded-full hover:bg-white">
+                  <Search className="w-5 h-5 text-gray-700" />
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl">
@@ -316,15 +320,15 @@ const Header = () => {
 
             {/* Authentication Section */}
             {loading ? (
-              <Button variant="ghost" size="sm" disabled>
-                <User className="w-5 h-5" />
+              <Button variant="ghost" size="sm" disabled className="bg-white/90 backdrop-blur-sm rounded-full">
+                <User className="w-5 h-5 text-gray-700" />
               </Button>
             ) : isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" data-testid="user-menu-trigger">
-                    <UserCircle className="w-5 h-5" />
-                    <span className="ml-2 hidden sm:inline">{user?.name}</span>
+                  <Button variant="ghost" size="sm" data-testid="user-menu-trigger" className="bg-white/90 backdrop-blur-sm rounded-full hover:bg-white">
+                    <UserCircle className="w-5 h-5 text-gray-700" />
+                    <span className="ml-2 hidden sm:inline text-gray-700">{user?.name}</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -356,6 +360,7 @@ const Header = () => {
                   size="sm" 
                   onClick={() => handleAuthClick('login')}
                   data-testid="login-button"
+                  className="bg-white/90 backdrop-blur-sm rounded-full hover:bg-white text-gray-700"
                 >
                   Login
                 </Button>
@@ -363,7 +368,7 @@ const Header = () => {
                   variant="outline" 
                   size="sm"
                   onClick={() => handleAuthClick('register')}
-                  className="hidden sm:inline-flex"
+                  className="hidden sm:inline-flex bg-white/90 backdrop-blur-sm rounded-full hover:bg-white text-gray-700 border-gray-300"
                   data-testid="signup-button"
                 >
                   Sign Up
@@ -372,8 +377,8 @@ const Header = () => {
             )}
 
             <CartDialog>
-              <Button variant="ghost" size="sm" className="relative" data-testid="cart-button">
-                <ShoppingCart className="w-5 h-5" />
+              <Button variant="ghost" size="sm" className="relative bg-white/90 backdrop-blur-sm rounded-full hover:bg-white" data-testid="cart-button">
+                <ShoppingCart className="w-5 h-5 text-gray-700" />
                 {cartCount > 0 && (
                   <Badge className="absolute -top-2 -right-2 w-5 h-5 rounded-full bg-orange-500 text-xs p-0 flex items-center justify-center">
                     {cartCount}
@@ -386,33 +391,33 @@ const Header = () => {
             <Button
               variant="ghost"
               size="sm"
-              className="mobile-menu-btn"
+              className="mobile-menu-btn bg-white/90 backdrop-blur-sm rounded-full hover:bg-white"
               style={{display: isMobile ? 'flex' : 'none', alignItems: 'center', justifyContent: 'center'}}
               onClick={() => setIsMenuOpen(!isMenuOpen)}
               data-testid="mobile-menu-button"
             >
-              {isMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {isMenuOpen ? <X className="w-5 h-5 text-gray-700" /> : <Menu className="w-5 h-5 text-gray-700" />}
             </Button>
           </div>
         </div>
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <nav className="mt-4 pb-4 border-t border-amber-100 pt-4">
-            <div className="flex flex-col space-y-3">
-              <a href="#home" className="text-gray-700 hover:text-orange-600 transition-colors">Home</a>
-              <a href="#products" className="text-gray-700 hover:text-orange-600 transition-colors">Products</a>
-              <a href="/bulk-orders" className="text-gray-700 hover:text-orange-600 transition-colors">Bulk Orders</a>
-              <a href="/gallery" className="text-gray-700 hover:text-orange-600 transition-colors">Gallery</a>
-              <a href="#about" className="text-gray-700 hover:text-orange-600 transition-colors">About</a>
-              <a href="#contact" className="text-gray-700 hover:text-orange-600 transition-colors">Contact</a>
+          <nav className="mt-4 pb-4 border-t border-white/20 pt-4 bg-black/20 backdrop-blur-[60%] rounded-lg">
+            <div className="flex flex-col space-y-3 px-4">
+              <a href="#home" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Home</a>
+              <a href="#products" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Products</a>
+              <a href="/bulk-orders" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Bulk Orders</a>
+              <a href="/gallery" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Gallery</a>
+              <a href="#about" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">About</a>
+              <a href="#contact" className="text-white/90 hover:text-orange-300 transition-colors backdrop-blur-[60%] bg-white/10 px-4 py-2 rounded-full">Contact</a>
               {!isAuthenticated && (
-                <div className="flex flex-col space-y-2 pt-2 border-t border-amber-100">
+                <div className="flex flex-col space-y-2 pt-2 border-t border-white/20">
                   <Button 
                     variant="ghost" 
                     size="sm" 
                     onClick={() => handleAuthClick('login')}
-                    className="justify-start"
+                    className="justify-start bg-white/90 backdrop-blur-sm rounded-full hover:bg-white text-gray-700"
                   >
                     Login
                   </Button>
@@ -420,7 +425,7 @@ const Header = () => {
                     variant="outline" 
                     size="sm"
                     onClick={() => handleAuthClick('register')}
-                    className="justify-start"
+                    className="justify-start bg-white/90 backdrop-blur-sm rounded-full hover:bg-white text-gray-700 border-gray-300"
                   >
                     Sign Up
                   </Button>
