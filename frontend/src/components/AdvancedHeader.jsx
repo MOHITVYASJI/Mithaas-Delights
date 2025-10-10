@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { ShoppingCart, User, Search, Menu, X, ChevronDown, LogOut, UserCircle, Package } from 'lucide-react';
+import { ShoppingCart, User, Search, Menu, X, ChevronDown, ChevronRight, LogOut, UserCircle, Package } from 'lucide-react';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Input } from './ui/input';
@@ -120,12 +120,12 @@ export const AdvancedHeader = () => {
   return (
     <>
       <motion.header 
-        className="fixed z-50 mx-auto"
+        className="fixed z-50 w-full"
         style={{
           top: 0,
-          left: '20px',
-          right: '20px',
-          maxWidth: 'calc(100% - 40px)',
+          left: 0,
+          right: 0,
+          
         }}
         initial={{ y: 0, opacity: 1 }}
         animate={{ 
@@ -138,21 +138,21 @@ export const AdvancedHeader = () => {
         }}
       >
         <div 
-          className="border shadow-2xl rounded-b-3xl"
+          className="border-b shadow-lg"
           style={{
             backdropFilter: 'blur(40px) saturate(180%)',
             WebkitBackdropFilter: 'blur(40px) saturate(180%)',
-            backgroundColor: isDark ? 'rgba(17, 24, 39, 0)' : 'rgba(255, 255, 255, 0)',
+            backgroundColor: isDark ? 'rgba(17, 24, 39, 0.4)' : 'rgba(255, 255, 255, 0.4)',
             borderColor: isDark ? 'rgba(107, 114, 128, 0.25)' : 'rgba(255, 255, 255, 0.25)',
-            borderWidth: '1px',
+            borderWidth: '0 0 1px 0',
             borderStyle: 'solid',
             boxShadow: isDark 
-              ? '0 10px 40px rgba(56, 189, 248, 0.2), 0 0 30px rgba(56, 189, 248, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
-              : '0 10px 40px rgba(249, 115, 22, 0.2), 0 0 30px rgba(249, 115, 22, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.4)',
-            overflow: 'hidden'
+              ? '0 4px 20px rgba(56, 189, 248, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
+              : '0 4px 20px rgba(249, 115, 22, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.2)',
+            minHeight: '60px'
           }}
         >
-          <div className="container mx-auto px-4 py-2">
+          <div className="container mx-auto px-4 py-1.5">
             <div className="flex items-center justify-between">
               {/* Logo */}
               <motion.a 
@@ -173,7 +173,7 @@ export const AdvancedHeader = () => {
                 style={{
                   display: isMobile ? 'none' : 'flex', 
                   alignItems: 'center', 
-                  gap: '0.75rem'
+                  gap: '0.5rem'
                 }}
               >
                 {['Home', 'Products', 'Bulk Orders', 'Gallery', 'About', 'Contact'].map((item, idx) => {
@@ -186,22 +186,22 @@ export const AdvancedHeader = () => {
                     <motion.a
                       key={item}
                       href={href}
-                      className="relative px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-2xl border transition-all duration-300 overflow-hidden group"
+                      className="relative px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl border transition-all duration-300 overflow-hidden group"
                       whileHover={{ 
-                        scale: 1.08,
-                        y: -2
+                        scale: 1.05,
+                        y: -1
                       }}
                       whileTap={{ scale: 0.95 }}
                       transition={{ 
                         type: 'spring', 
-                        stiffness: 300, 
-                        damping: 15 
+                        stiffness: 400, 
+                        damping: 20 
                       }}
                       style={{
-                        backdropFilter: 'blur(60%) saturate(200%)',
-                        WebkitBackdropFilter: 'blur(60%) saturate(200%)',
-                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                        borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+                        backdropFilter: 'blur(60%) saturate(150%)',
+                        WebkitBackdropFilter: 'blur(60%) saturate(150%)',
+                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                        borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(255, 255, 255, 0.3)',
                         boxShadow: isDark 
                           ? '0 4px 12px rgba(56, 189, 248, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.1)'
                           : '0 4px 12px rgba(249, 115, 22, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.3)',
@@ -243,10 +243,10 @@ export const AdvancedHeader = () => {
                         className="rounded-full p-2 border transition-all duration-300"
                         data-testid="search-button"
                         style={{
-                          backdropFilter: 'blur(60%) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
-                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                          borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+                          backdropFilter: 'blur(60%) saturate(150%)',
+                          WebkitBackdropFilter: 'blur(60%) saturate(150%)',
+                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                          borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(255, 255, 255, 0.3)',
                           boxShadow: isDark 
                             ? '0 4px 12px rgba(56, 189, 248, 0.15)'
                             : '0 4px 12px rgba(249, 115, 22, 0.15)'
@@ -345,10 +345,10 @@ export const AdvancedHeader = () => {
                           className="rounded-2xl px-3 py-2 border transition-all duration-300"
                           data-testid="user-menu-trigger"
                           style={{
-                            backdropFilter: 'blur(60%) saturate(200%)',
-                            WebkitBackdropFilter: 'blur(60%) saturate(200%)',
-                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                            borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+                            backdropFilter: 'blur(60%) saturate(150%)',
+                            WebkitBackdropFilter: 'blur(60%) saturate(150%)',
+                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                            borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(255, 255, 255, 0.3)',
                             boxShadow: isDark 
                               ? '0 4px 12px rgba(56, 189, 248, 0.15)'
                               : '0 4px 12px rgba(249, 115, 22, 0.15)'
@@ -405,10 +405,10 @@ export const AdvancedHeader = () => {
                         className="rounded-2xl text-sm px-4 py-2 border transition-all duration-300"
                         data-testid="login-button"
                         style={{
-                          backdropFilter: 'blur(60%) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
-                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                          borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+                          backdropFilter: 'blur(60%) saturate(150%)',
+                          WebkitBackdropFilter: 'blur(60%) saturate(150%)',
+                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                          borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(255, 255, 255, 0.3)',
                           boxShadow: isDark 
                             ? '0 4px 12px rgba(56, 189, 248, 0.15)'
                             : '0 4px 12px rgba(249, 115, 22, 0.15)'
@@ -439,8 +439,8 @@ export const AdvancedHeader = () => {
                         className="hidden sm:inline-flex rounded-2xl text-sm px-4 py-2 border font-semibold transition-all duration-300 premium-button"
                         data-testid="signup-button"
                         style={{
-                          backdropFilter: 'blur(60%) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
+                          backdropFilter: 'blur(60%) saturate(150%)',
+                          WebkitBackdropFilter: 'blur(60%) saturate(150%)',
                           background: isDark 
                             ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(14, 165, 233, 0.3) 100%)'
                             : 'linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.3) 100%)',
@@ -480,10 +480,10 @@ export const AdvancedHeader = () => {
                       className="relative rounded-full p-2 border transition-all duration-300" 
                       data-testid="cart-button"
                       style={{
-                        backdropFilter: 'blur(60%) saturate(200%)',
-                        WebkitBackdropFilter: 'blur(60%) saturate(200%)',
-                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                        borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+                        backdropFilter: 'blur(60%) saturate(150%)',
+                        WebkitBackdropFilter: 'blur(60%) saturate(150%)',
+                        backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                        borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(255, 255, 255, 0.3)',
                         boxShadow: isDark 
                           ? '0 4px 12px rgba(56, 189, 248, 0.15)'
                           : '0 4px 12px rgba(249, 115, 22, 0.15)'
@@ -524,10 +524,10 @@ export const AdvancedHeader = () => {
                     display: isMobile ? 'flex' : 'none', 
                     alignItems: 'center', 
                     justifyContent: 'center',
-                    backdropFilter: 'blur(60%) saturate(200%)',
-                    WebkitBackdropFilter: 'blur(60%) saturate(200%)',
-                    backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                    borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)',
+                    backdropFilter: 'blur(60%) saturate(150%)',
+                    WebkitBackdropFilter: 'blur(60%) saturate(150%)',
+                    backgroundColor: isDark ? 'rgba(31, 41, 55, 0.6)' : 'rgba(255, 255, 255, 0.6)',
+                    borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(255, 255, 255, 0.3)',
                     boxShadow: isDark 
                       ? '0 4px 12px rgba(56, 189, 248, 0.15)'
                       : '0 4px 12px rgba(249, 115, 22, 0.15)'
@@ -540,65 +540,142 @@ export const AdvancedHeader = () => {
               </div>
             </div>
 
-            {/* Mobile Menu with Slide Animation */}
+            {/* Enhanced Mobile Menu with Premium Animations */}
             <AnimatePresence>
               {isMenuOpen && (
-                <motion.nav 
-                  className="mt-3 pb-3 border-t border-white/30 dark:border-gray-700/30 pt-3"
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: 'auto' }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.3 }}
+                <motion.div
+                  className="absolute top-full left-0 right-0 mt-1 mx-4 rounded-2xl overflow-hidden"
+                  initial={{ opacity: 0, y: -20, scale: 0.95 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -20, scale: 0.95 }}
+                  transition={{ 
+                    duration: 0.4, 
+                    ease: [0.4, 0, 0.2, 1],
+                    type: "spring",
+                    damping: 25,
+                    stiffness: 300
+                  }}
+                  style={{
+                    backdropFilter: 'blur(40px) saturate(180%)',
+                    WebkitBackdropFilter: 'blur(40px) saturate(180%)',
+                    backgroundColor: isDark ? 'rgba(17, 24, 39, 0.9)' : 'rgba(255, 255, 255, 0.9)',
+                    borderColor: isDark ? 'rgba(107, 114, 128, 0.3)' : 'rgba(255, 255, 255, 0.3)',
+                    border: '1px solid',
+                    boxShadow: isDark 
+                      ? '0 20px 40px rgba(0, 0, 0, 0.3), 0 0 30px rgba(56, 189, 248, 0.2)'
+                      : '0 20px 40px rgba(0, 0, 0, 0.1), 0 0 30px rgba(249, 115, 22, 0.2)'
+                  }}
                 >
-                  <div className="flex flex-col gap-2">
-                    {[
-                      { name: 'Home', href: '/' },
-                      { name: 'Products', href: '/#products' },
-                      { name: 'Bulk Orders', href: '/bulk-orders' },
-                      { name: 'Gallery', href: '/gallery' },
-                      { name: 'About', href: '/#about' },
-                      { name: 'Contact', href: '/#contact' }
-                    ].map((item, idx) => (
-                      <motion.a
-                        key={item.name}
-                        href={item.href}
-                        className="px-4 py-3 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-2xl border transition-all"
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: idx * 0.05 }}
-                        whileTap={{ scale: 0.95 }}
-                        style={{
-                          backdropFilter: 'blur(60%) saturate(200%)',
-                          WebkitBackdropFilter: 'blur(60%) saturate(200%)',
-                          backgroundColor: isDark ? 'rgba(31, 41, 55, 0.1)' : 'rgba(255, 255, 255, 0.1)',
-                          borderColor: isDark ? 'rgba(107, 114, 128, 0.4)' : 'rgba(255, 255, 255, 0.4)'
-                        }}
-                      >
-                        {item.name}
-                      </motion.a>
-                    ))}
-                    {!isAuthenticated && (
-                      <div className="flex flex-col gap-2 pt-2 border-t border-white/30 dark:border-gray-700/30">
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          onClick={() => handleAuthClick('login')}
-                          className="justify-start backdrop-blur-md bg-white/60 dark:bg-gray-800/60 border border-white/30 dark:border-gray-700/30"
+                  <nav className="p-6">
+                    <div className="flex flex-col gap-3">
+                      {[
+                        { name: 'Home', href: '/', icon: '🏠' },
+                        { name: 'Products', href: '/#products', icon: '🍬' },
+                        { name: 'Bulk Orders', href: '/bulk-orders', icon: '📦' },
+                        { name: 'Gallery', href: '/gallery', icon: '🖼️' },
+                        { name: 'About', href: '/#about', icon: '📖' },
+                        { name: 'Contact', href: '/#contact', icon: '📞' }
+                      ].map((item, idx) => (
+                        <motion.a
+                          key={item.name}
+                          href={item.href}
+                          className="group flex items-center px-4 py-4 text-sm font-medium text-gray-700 dark:text-gray-200 rounded-xl border transition-all duration-300"
+                          initial={{ opacity: 0, x: -30 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ 
+                            delay: idx * 0.08,
+                            type: "spring",
+                            damping: 20,
+                            stiffness: 300
+                          }}
+                          whileHover={{ 
+                            scale: 1.02,
+                            x: 8,
+                            transition: { duration: 0.2 }
+                          }}
+                          whileTap={{ scale: 0.98 }}
+                          onClick={() => setIsMenuOpen(false)}
+                          style={{
+                            backdropFilter: 'blur(20px)',
+                            WebkitBackdropFilter: 'blur(20px)',
+                            backgroundColor: isDark ? 'rgba(31, 41, 55, 0.3)' : 'rgba(255, 255, 255, 0.3)',
+                            borderColor: isDark ? 'rgba(107, 114, 128, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+                          }}
                         >
-                          Login
-                        </Button>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => handleAuthClick('register')}
-                          className="justify-start backdrop-blur-md bg-white/60 dark:bg-gray-800/60 border border-white/30 dark:border-gray-700/30"
+                          <motion.span 
+                            className="text-lg mr-3"
+                            whileHover={{ scale: 1.2 }}
+                            transition={{ type: "spring", stiffness: 400 }}
+                          >
+                            {item.icon}
+                          </motion.span>
+                          <span className="flex-1">{item.name}</span>
+                          <motion.div
+                            className="opacity-0 group-hover:opacity-100 transition-opacity"
+                            initial={{ x: -10 }}
+                            whileHover={{ x: 0 }}
+                          >
+                            <ChevronRight className="w-4 h-4" />
+                          </motion.div>
+                        </motion.a>
+                      ))}
+                      
+                      {!isAuthenticated && (
+                        <motion.div 
+                          className="flex flex-col gap-3 pt-4 border-t border-white/20 dark:border-gray-700/20"
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ delay: 0.5 }}
                         >
-                          Sign Up
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </motion.nav>
+                          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => {
+                                handleAuthClick('login');
+                                setIsMenuOpen(false);
+                              }}
+                              className="w-full justify-start text-sm py-3 px-4 rounded-xl font-medium transition-all duration-300"
+                              style={{
+                                backdropFilter: 'blur(20px)',
+                                WebkitBackdropFilter: 'blur(20px)',
+                                backgroundColor: isDark ? 'rgba(56, 189, 248, 0.1)' : 'rgba(249, 115, 22, 0.1)',
+                                borderColor: isDark ? 'rgba(56, 189, 248, 0.3)' : 'rgba(249, 115, 22, 0.3)',
+                                border: '1px solid'
+                              }}
+                            >
+                              <User className="w-4 h-4 mr-2" />
+                              Login
+                            </Button>
+                          </motion.div>
+                          <motion.div whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>
+                            <Button 
+                              variant="outline" 
+                              size="sm"
+                              onClick={() => {
+                                handleAuthClick('register');
+                                setIsMenuOpen(false);
+                              }}
+                              className="w-full justify-start text-sm py-3 px-4 rounded-xl font-semibold transition-all duration-300"
+                              style={{
+                                backdropFilter: 'blur(20px)',
+                                WebkitBackdropFilter: 'blur(20px)',
+                                background: isDark 
+                                  ? 'linear-gradient(135deg, rgba(56, 189, 248, 0.2) 0%, rgba(14, 165, 233, 0.3) 100%)'
+                                  : 'linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.3) 100%)',
+                                borderColor: isDark ? 'rgba(56, 189, 248, 0.5)' : 'rgba(249, 115, 22, 0.5)',
+                                color: isDark ? 'rgb(125, 211, 252)' : 'rgb(249, 115, 22)'
+                              }}
+                            >
+                              <UserCircle className="w-4 h-4 mr-2" />
+                              Sign Up
+                            </Button>
+                          </motion.div>
+                        </motion.div>
+                      )}
+                    </div>
+                  </nav>
+                </motion.div>
               )}
             </AnimatePresence>
           </div>
